@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/finb/bark-server/v2/internal/gotifycompat"
+	"github.com/wallleap/hotify-bark-server/internal/gotifycompat"
 	"github.com/gofiber/fiber/v2"
 	fiberws "github.com/gofiber/websocket/v2"
 )

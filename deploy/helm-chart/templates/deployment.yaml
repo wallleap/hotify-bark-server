@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "bark-server.fullname" . }}
+  name: {{ include "hotify-bark-server.fullname" . }}
   labels:
-    {{- include "bark-server.labels" . | nindent 4 }}
+    {{- include "hotify-bark-server.labels" . | nindent 4 }}
 spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
   selector:
     matchLabels:
-      {{- include "bark-server.selectorLabels" . | nindent 6 }}
+      {{- include "hotify-bark-server.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -18,13 +18,13 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "bark-server.selectorLabels" . | nindent 8 }}
+        {{- include "hotify-bark-server.selectorLabels" . | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "bark-server.serviceAccountName" . }}
+      serviceAccountName: {{ include "hotify-bark-server.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -51,7 +51,7 @@ spec:
               path: /ping
               port: http
           {{- if .Values.extra_database.enabled }}
-          command: ["/usr/local/bin/bark-server"]
+          command: ["/usr/local/bin/hotify-bark-server"]
           args: ["-dsn={{.Values.extra_database.mysql.username}}:{{.Values.extra_database.mysql.password}}@tcp({{.Values.extra_database.mysql.host}}:{{.Values.extra_database.mysql.port}})/{{.Values.extra_database.mysql.database}}"]
           {{- end}}
           resources:

@@ -11,11 +11,11 @@ import (
 
 func routerAuth(user, passwd string, router fiber.Router, urlPrefix string) {
 	if user == "" && passwd == "" {
-		logger.Info("Bark Server Has No Basic Auth.")
+		logger.Info("Hotify-Bark Server Has No Basic Auth.")
 		return
 	}
 
-	logger.Info("Bark Server Has Basic Auth Enabled.")
+	logger.Info("Hotify-Bark Server Has Basic Auth Enabled.")
 	authFreeRouters := []string{"/ping", "/register", "/healthz", "/version", "/message", "/stream"}
 	basicAuth := fiberbasicauth.New(fiberbasicauth.Config{
 		Users: map[string]string{user: passwd},

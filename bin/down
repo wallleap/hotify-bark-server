@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# 停止并移除 docker compose 的 hotify-bark-server
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+COMPOSE_FILE="${COMPOSE_FILE:-$ROOT/deploy/docker-compose.local.yaml}"
+
+exec docker compose -f "$COMPOSE_FILE" down "$@"

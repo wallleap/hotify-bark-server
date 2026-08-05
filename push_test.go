@@ -8,7 +8,7 @@ import (
 
 	"io"
 
-	"github.com/finb/bark-server/v2/database"
+	"github.com/wallleap/hotify-bark-server/database"
 	"github.com/gofiber/fiber/v2"
 	jsoniter "github.com/json-iterator/go"
 )

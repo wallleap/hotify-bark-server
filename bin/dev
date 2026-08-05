@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# bark-server 本地开发启动
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+ADDR="${ADDR:-127.0.0.1:8080}"
+DATA="${DATA:-$ROOT/dev-data}"
+
+mkdir -p "$DATA"
+
+exec go run . --addr "$ADDR" --data "$DATA" "$@"

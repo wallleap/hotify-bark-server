@@ -1,8 +1,14 @@
 FROM golang:1-alpine AS builder
 
-COPY . /go/src/github.com/finb/bark-server
+COPY . /go/src/github.com/wallleap/hotify-bark-server
 
-WORKDIR /go/src/github.com/finb/bark-server
+WORKDIR /go/src/github.com/wallleap/hotify-bark-server
+
+# Use China-accessible Go module proxy by default (proxy.golang.org is often
+# unreachable from CN networks, causing `go: downloading ... i/o timeout`).
+# Override with `--build-arg GOPROXY=...`, e.g. GOPROXY=direct for a cached/local vm.
+ARG GOPROXY=https://goproxy.cn,direct
+ENV GOPROXY=${GOPROXY}
 
 RUN set -ex \
     && apk add git gcc libc-dev \
@@ -36,8 +42,8 @@ RUN set -ex \
     && ln -sf /usr/share/zoneinfo/${TZ} /etc/localtime \
     && echo ${TZ} > /etc/timezone
 
-COPY --from=builder /go/bin/bark-server /usr/local/bin/bark-server
-COPY --from=builder /go/src/github.com/finb/bark-server/deploy/entrypoint.sh /entrypoint.sh
+COPY --from=builder /go/bin/hotify-bark-server /usr/local/bin/hotify-bark-server
+COPY --from=builder /go/src/github.com/wallleap/hotify-bark-server/deploy/entrypoint.sh /entrypoint.sh
 
 VOLUME /data
 
@@ -45,4 +51,4 @@ EXPOSE 8080
 
 ENTRYPOINT ["/entrypoint.sh"]
 
-CMD ["bark-server"]
+CMD ["hotify-bark-server"]

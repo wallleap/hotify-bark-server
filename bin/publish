@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# 构建并发布 hotify-bark-server 镜像到 Docker Hub
+#
+# 用法:
+#   bin/publish                          # 默认: wallleap/hotify-bark-server:<git tag|latest> (宿主机单架构)
+#   IMAGE=yourname/hotify-bark-server bin/publish
+#   TAG=v1.2.3 bin/publish
+#   PUSH_LATEST=0 bin/publish            # 不额外打 latest 标签
+#   bin/publish --all                    # 多架构构建并推送 (linux/amd64, linux/arm64, linux/arm/v7)
+#   PLATFORM=linux/amd64,linux/arm64 bin/publish
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+IMAGE="${IMAGE:-wallleap/hotify-bark-server}"
+TAG="${TAG:-}"
+if [ -z "$TAG" ]; then
+    TAG="$(git describe --tags 2>/dev/null || echo latest)"
+fi
+PUSH_LATEST="${PUSH_LATEST:-1}"
+PLATFORM="${PLATFORM:-}"
+GOPROXY="${GOPROXY:-https://goproxy.cn,direct}"
+
+# --all => 多架构
+if [ "${1:-}" = "--all" ]; then
+    PLATFORM="linux/amd64,linux/arm64,linux/arm/v7"
+fi
+
+FULL="$IMAGE:$TAG"
+
+echo "==> 构建镜像: $FULL"
+
+if [ -n "$PLATFORM" ]; then
+    # 多架构: 使用 docker-container 驱动 builder（docker 驱动不支持多平台 manifest）
+    if ! docker buildx ls >/dev/null 2>&1; then
+        echo "==> buildx 不可用，请使用 Docker 23+ 或启用 Buildx 插件" >&2
+        exit 1
+    fi
+    BUILDER="hotify-builder"
+    if ! docker buildx ls --format '{{.Name}}' 2>/dev/null | grep -qx "$BUILDER"; then
+        echo "==> 创建并启用 buildx builder: $BUILDER (docker-container)..."
+        docker buildx create --name "$BUILDER" --driver docker-container --bootstrap --use
+    fi
+    echo "==> 多架构构建: $PLATFORM"
+    docker buildx build --builder "$BUILDER" --platform "$PLATFORM" --build-arg GOPROXY="$GOPROXY" -t "$FULL" -f deploy/Dockerfile --push .
+    if [ "$PUSH_LATEST" = "1" ] && [ "$TAG" != "latest" ]; then
+        echo "==> 同时推送: $IMAGE:latest"
+        docker buildx build --builder "$BUILDER" --platform "$PLATFORM" --build-arg GOPROXY="$GOPROXY" -t "$IMAGE:latest" -f deploy/Dockerfile --push .
+    fi
+else
+    # 单架构: 构建宿主机架构
+    docker build --build-arg GOPROXY="$GOPROXY" -t "$FULL" -f deploy/Dockerfile .
+
+    if [ "${SKIP_LOGIN_CHECK:-0}" != "1" ]; then
+        if ! docker info 2>/dev/null | grep -q 'Username:'; then
+            echo "==> 未检测到 Docker Hub 登录，请先执行: docker login" >&2
+            exit 1
+        fi
+    fi
+
+    echo "==> 推送镜像: $FULL"
+    docker push "$FULL"
+
+    if [ "$PUSH_LATEST" = "1" ] && [ "$TAG" != "latest" ]; then
+        echo "==> 同时推送: $IMAGE:latest"
+        docker tag "$FULL" "$IMAGE:latest"
+        docker push "$IMAGE:latest"
+    fi
+fi
+
+echo "==> 发布完成: $FULL"

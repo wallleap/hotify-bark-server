@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# 编译 bark-server 本地二进制
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+GOOS="${GOOS:-$(go env GOOS)}"
+GOARCH="${GOARCH:-$(go env GOARCH)}"
+OUT="${OUT:-dist/hotify-bark-server}"
+
+VERSION="$(git describe --tags 2>/dev/null || echo dev)"
+BUILD_DATE="$(date '+%F %T')"
+COMMIT_ID="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+
+mkdir -p dist
+CGO_ENABLED=0 go build -trimpath -o "$OUT" \
+    -ldflags "-w -s \
+        -X 'main.version=${VERSION}' \
+        -X 'main.buildDate=${BUILD_DATE}' \
+        -X 'main.commitID=${COMMIT_ID}'" .
+
+echo "built: $OUT ($GOOS/$GOARCH, version=${VERSION})"

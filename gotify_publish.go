@@ -3,7 +3,7 @@ package main
 import (
 	"strings"
 
-	"github.com/finb/bark-server/v2/apns"
+	"github.com/wallleap/hotify-bark-server/apns"
 	"github.com/mritd/logger"
 )
 

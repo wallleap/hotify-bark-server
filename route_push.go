@@ -8,7 +8,7 @@ import (
 
 	"github.com/gofiber/fiber/v2/utils"
 
-	"github.com/finb/bark-server/v2/apns"
+	"github.com/wallleap/hotify-bark-server/apns"
 
 	"github.com/gofiber/fiber/v2"
 )

@@ -1,6 +1,6 @@
 // +heroku goVersion go1.17
 
-module github.com/finb/bark-server/v2
+module github.com/wallleap/hotify-bark-server
 
 go 1.25.5
 

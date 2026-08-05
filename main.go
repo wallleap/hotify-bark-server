@@ -8,9 +8,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/finb/bark-server/v2/apns"
-	"github.com/finb/bark-server/v2/database"
-	"github.com/finb/bark-server/v2/internal/gotifycompat"
+	"github.com/wallleap/hotify-bark-server/apns"
+	"github.com/wallleap/hotify-bark-server/database"
+	"github.com/wallleap/hotify-bark-server/internal/gotifycompat"
 
 	jsoniter "github.com/json-iterator/go"
 
@@ -30,13 +30,14 @@ var db database.Database
 
 func main() {
 	app := &cli.App{
-		Name:    "bark-server",
-		Usage:   "Push Server For Bark",
+		Name:    "hotify-bark-server",
+		Usage:   "Push Server For Hotify-Bark (fork of Bark)",
 		Version: fmt.Sprintf("%s %s %s", version, commitID, buildDate),
 		Flags:   getAppFlags(),
 		Authors: []*cli.Author{
 			{Name: "mritd", Email: "mritd@linux.com"},
 			{Name: "Finb", Email: "to@day.app"},
+			{Name: "wallleap"},
 		},
 		Action: runServer,
 	}
@@ -88,7 +89,7 @@ func determineNetwork(c *cli.Context) string {
 
 func createFiberApp(c *cli.Context, network string) *fiber.App {
 	return fiber.New(fiber.Config{
-		ServerHeader:      "Bark",
+		ServerHeader:      "Hotify-Bark",
 		CaseSensitive:     c.Bool("case-sensitive"),
 		StrictRouting:     c.Bool("strict-routing"),
 		Concurrency:       c.Int("concurrency"),
@@ -152,7 +153,7 @@ func setupGracefulShutdown(fiberApp *fiber.App) {
 		sigs := make(chan os.Signal, 1)
 		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 		for range sigs {
-			logger.Warn("Received a termination signal, bark server shutdown...")
+			logger.Warn("Received a termination signal, hotify-bark-server shutdown...")
 			if err := fiberApp.Shutdown(); err != nil {
 				logger.Errorf("Server forced to shutdown error: %v", err)
 			}
@@ -166,7 +167,7 @@ func setupGracefulShutdown(fiberApp *fiber.App) {
 func startServer(c *cli.Context, fiberApp *fiber.App, network string) error {
 	if network == "tcp" {
 		addr := c.String("addr")
-		logger.Infof("Bark Server Listen at: %s , Database: %s", addr, reflect.TypeOf(db))
+		logger.Infof("Hotify-Bark Server Listen at: %s , Database: %s", addr, reflect.TypeOf(db))
 
 		cert, key := c.String("cert"), c.String("key")
 		if cert != "" && key != "" {
@@ -178,7 +179,7 @@ func startServer(c *cli.Context, fiberApp *fiber.App, network string) error {
 	// Unix socket
 	socket := c.String("unix-socket")
 	os.Remove(socket)
-	logger.Infof("Bark Server Listen at: %s , Database: %s", socket, reflect.TypeOf(db))
+	logger.Infof("Hotify-Bark Server Listen at: %s , Database: %s", socket, reflect.TypeOf(db))
 	return fiberApp.Listen(socket)
 }
 

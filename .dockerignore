@@ -1,0 +1,18 @@
+# Local dev data / build artifacts (heavy, not needed in image)
+dist
+dev-data
+deploy/data
+
+# IDE
+.idea
+.vscode
+
+# CI / misc (not needed in image)
+.github
+docs
+bin
+*.test
+*.exe
+
+# NOTE: .git is intentionally NOT ignored: deploy/Dockerfile uses
+# `git describe --tags` / `git rev-parse HEAD` to stamp build version.
