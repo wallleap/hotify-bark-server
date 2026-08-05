@@ -11,6 +11,9 @@ vars:
   # Go module proxy for docker builds; override with GOPROXY=direct (cached host) etc.
   GOPROXY:
     sh: echo ${GOPROXY:-https://goproxy.cn,direct}
+  # Alpine apk mirror for docker builds; override with ALPINE_MIRROR=...
+  ALPINE_MIRROR:
+    sh: echo ${ALPINE_MIRROR:-https://mirrors.aliyun.com}
 
 tasks:
   clean:
@@ -225,7 +228,7 @@ tasks:
         }        
   docker:
     cmds:
-      - docker build --build-arg GOPROXY={{.GOPROXY}} -t wallleap/hotify-bark-server:{{.BUILD_VERSION}} -f deploy/Dockerfile .
+      - docker build --build-arg GOPROXY={{.GOPROXY}} --build-arg ALPINE_MIRROR={{.ALPINE_MIRROR}} -t wallleap/hotify-bark-server:{{.BUILD_VERSION}} -f deploy/Dockerfile .
       - docker tag wallleap/hotify-bark-server:{{.BUILD_VERSION}} wallleap/hotify-bark-server
   docker-buildx:
     vars:
@@ -235,7 +238,7 @@ tasks:
       - defer: docker rm -f dind
       - docker exec -w /bark-server -it dind docker login
       - docker exec -w /bark-server -it dind docker buildx create --name builder --driver docker-container --bootstrap --use
-      - docker exec -w /bark-server -it dind docker buildx build --platform {{.PLATFORM}} --build-arg GOPROXY={{.GOPROXY}} -t wallleap/hotify-bark-server:{{.BUILD_VERSION}} -f deploy/Dockerfile --push .
+      - docker exec -w /bark-server -it dind docker buildx build --platform {{.PLATFORM}} --build-arg GOPROXY={{.GOPROXY}} --build-arg ALPINE_MIRROR={{.ALPINE_MIRROR}} -t wallleap/hotify-bark-server:{{.BUILD_VERSION}} -f deploy/Dockerfile --push .
   default:
     cmds:
       - task: clean

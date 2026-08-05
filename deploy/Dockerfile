@@ -10,6 +10,11 @@ WORKDIR /go/src/github.com/wallleap/hotify-bark-server
 ARG GOPROXY=https://goproxy.cn,direct
 ENV GOPROXY=${GOPROXY}
 
+# Use a China-accessible Alpine mirror for apk (dl-cdn.alpinelinux.org is
+# slow/unreachable from CN networks). Override with --build-arg ALPINE_MIRROR=...
+ARG ALPINE_MIRROR=https://mirrors.aliyun.com
+RUN sed -i "s|https\?://[^/]*/alpine|${ALPINE_MIRROR%/}/alpine|" /etc/apk/repositories
+
 RUN set -ex \
     && apk add git gcc libc-dev \
     && BUILD_VERSION=$(git describe --tags) \
@@ -35,6 +40,10 @@ RUN echo 'hosts: files dns' > /etc/nsswitch.conf
 ARG TIMEZONE=Asia/Shanghai
 
 ENV TZ=${TIMEZONE}
+
+# Same Alpine mirror as the builder stage (default Aliyun, CN-accessible).
+ARG ALPINE_MIRROR=https://mirrors.aliyun.com
+RUN sed -i "s|https\?://[^/]*/alpine|${ALPINE_MIRROR%/}/alpine|" /etc/apk/repositories
 
 RUN set -ex \
     && apk upgrade \

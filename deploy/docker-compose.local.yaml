@@ -6,6 +6,8 @@ services:
       args:
         # Go module 代理；本机已有缓存时可用 GOPROXY=direct 加速
         GOPROXY: ${GOPROXY:-https://goproxy.cn,direct}
+        # Alpine 软件源镜像加速（国内默认阿里云，可用 ALPINE_MIRROR 覆盖）
+        ALPINE_MIRROR: ${ALPINE_MIRROR:-https://mirrors.aliyun.com}
     image: hotify-bark-server:local
     container_name: hotify-bark-server
     restart: always
