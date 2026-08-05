@@ -1,0 +1,67 @@
+# Gotify-Compatible Monitoring Interface
+
+bark-server 对外提供一组与 [Gotify](https://gotify.net) **只读/订阅**协议兼容的接口，让
+[hotify-bridge](https://github.com/sakura-lolipop/hotify-bridge) 可以像监测 Gotify 一样监测
+bark——bark 每收到一次推送，就把它持久化为一条 gotify 风格的消息，并实时推送给订阅者。
+iOS 侧投递成败**不影响**这条监测流（hotify-bridge 拿到消息后照常转推华为 Push Kit）。
+
+## 接口
+
+| Method | Path | 认证 | 说明 |
+|---|---|---|---|
+| GET | `/version` | 无 | 返回 `{"version":"<build 版本>"}`，供 hotify-bridge 同机探测 |
+| GET | `/message?token=<clientToken>&limit=<N>&since=<id>` | 客户端 token | 返回历史消息 `{"messages":[...]}`，id 降序（最新在前），`limit` 默认 100 上限 200，`since` 过滤 `id < since` |
+| GET | `/stream?token=<clientToken>` | 客户端 token | WebSocket，实时推送**裸** gotify 消息帧（无 `event:` 外壳） |
+
+消息帧 / `messages[]` 元素格式（与 Gotify 一致）：
+
+```json
+{
+  "id": 1,
+  "appid": 1,
+  "title": "Hello",
+  "message": "World",
+  "priority": 2,
+  "extras": {"device_key": "xxx", "level": "critical"},
+  "date": "2026-08-05T20:52:46.987289+08:00"
+}
+```
+
+- 所有消息归入单一虚拟应用 `appid=1`。
+- `date` 为 RFC3339Nano 字符串，桥按不透明字符串透传。
+- `priority` 由 bark 的 `level` 映射：`critical`/`timeSensitive`→2、`active`→1、其余→0。
+- token 读取优先级：`?token=` → `X-Gotify-Key` 头 → `Authorization: Bearer`（与 Gotify 相同）。
+- 未授权访问 `/message`、`/stream` 返回 `401`（WebSocket 在握手阶段返回 401）。
+
+## 客户端 token
+
+- 通过环境变量 `BARK_SERVER_GOTIFY_CLIENT_TOKEN` 或启动参数 `--gotify-client-token` 预置
+  （推荐，可重复部署）。**只以 SHA-256 哈希存储**，不做明文持久化。
+- 不设置时自动生成：以哈希持久化到 `<data>/gotify.db`（0600），**首次生成时打印一次**，
+  之后重启保持稳定；明文仅用于首次展示，丢失后请改用环境变量预置或删除该文件重新生成。
+- 数据目录不可写时退化为内存存储（不持久化），hotify-bridge 靠 id 倒退信号兜底重启场景。
+
+## 接入 hotify-bridge
+
+在桥的 `bridge_config.yaml` 中配置（或环境变量 `GOTIFY_HTTP_URL` / `GOTIFY_CLIENT_TOKEN`）：
+
+```yaml
+gotify_url: http://<bark-host>:8080
+gotify_token: <上面拿到的 client token>
+```
+
+桥即可像监测 Gotify 一样订阅 bark 的 `/stream` 并回补历史。
+
+## 行为与运维说明
+
+- 推送即发布：`push()` 解析到 `device_token` 后即写入消息并广播，**不等待** APNs 结果。
+- **batch 推送会为每个设备各发布一条消息**（每条一次 `push()`），对应每条设备级投递。
+- 消息保留最近 **1000** 条（`<data>/gotify.db`），超出自动裁剪；桥断线回补最多覆盖最新 100 条。
+- 消息 ID 单调递增（bbolt `NextSequence`），重启不倒退；若存储被重置，桥按 id 倒退信号自动重置水位。
+- `/message`、`/stream`、`/version` 已加入基础认证白名单（它们走自己的 token 认证），
+  开启 `--user/--password` 时不受影响。
+- 兼容路由说明：`/message`、`/stream`、`/version` 为静态路径，优先于旧版 `GET /:device_key`
+  兼容推送；若某个设备 key 恰好叫 `message`/`stream`/`version`，其旧的 GET 兼容推送会命中本接口
+  并返回 `401`，请改用 `POST /push` 或换设备 key。
+- WebSocket 心跳：服务器 45s 发一次 ping；客户端 ping（桥每 20s）会刷新读超时（60s），
+  静默失效的连接会被回收。WebSocket 默认放行所有 Origin（桥不发 Origin）。

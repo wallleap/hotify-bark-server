@@ -16,7 +16,7 @@ func routerAuth(user, passwd string, router fiber.Router, urlPrefix string) {
 	}
 
 	logger.Info("Bark Server Has Basic Auth Enabled.")
-	authFreeRouters := []string{"/ping", "/register", "/healthz"}
+	authFreeRouters := []string{"/ping", "/register", "/healthz", "/version", "/message", "/stream"}
 	basicAuth := fiberbasicauth.New(fiberbasicauth.Config{
 		Users: map[string]string{user: passwd},
 		Realm: "Coffee Time",

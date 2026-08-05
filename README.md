@@ -69,4 +69,5 @@ Just run the server with `-dsn=user:pass@tcp(mysql_host)/bark`, it will use MySQ
 
 * [API_V2.md](docs/API_V2.md).
 * [MCP.md](docs/MCP.md).
+* [GOTIFY_COMPAT.md](docs/GOTIFY_COMPAT.md).
 

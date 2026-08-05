@@ -263,6 +263,10 @@ func push(params map[string]interface{}) (int, error) {
 
 	msg.DeviceToken = deviceToken
 
+	// Mirror the push into the gotify-compatible monitoring stream (hotify-bridge).
+	// Published once the device token is resolved, independent of iOS delivery.
+	gotifyPublish(&msg)
+
 	code, err := apns.Push(&msg)
 
 	// Invalid token, delete it from database.

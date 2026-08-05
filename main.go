@@ -10,6 +10,7 @@ import (
 
 	"github.com/finb/bark-server/v2/apns"
 	"github.com/finb/bark-server/v2/database"
+	"github.com/finb/bark-server/v2/internal/gotifycompat"
 
 	jsoniter "github.com/json-iterator/go"
 
@@ -50,8 +51,31 @@ func runServer(c *cli.Context) error {
 	fiberApp := createFiberApp(c, network)
 	setupRouter(c, fiberApp)
 	initializeDatabase(c)
+	initGotifyCompat(c)
 	setupGracefulShutdown(fiberApp)
 	return startServer(c, fiberApp, network)
+}
+
+// initGotifyCompat initializes the gotify-compatible monitoring interface
+// (WebSocket /stream + /message + /version) used by hotify-bridge. Persistence
+// falls back to in-memory when the data directory is unusable; the returned
+// error is logged, never fatal to the bark server.
+func initGotifyCompat(c *cli.Context) {
+	svc, err := gotifycompat.Init(gotifycompat.Config{
+		DataDir:     c.String("data"),
+		ClientToken: c.String("gotify-client-token"),
+		Version:     version,
+	})
+	if err != nil {
+		logger.Errorf("gotify compat init failed: %v", err)
+		return
+	}
+	gotifyService = svc
+	if tok := svc.ClientToken(); tok != "" {
+		logger.Infof("Gotify-compatible stream ready. Generated client token (set bridge gotify_token to this): %s", tok)
+	} else {
+		logger.Info("Gotify-compatible stream ready.")
+	}
 }
 
 // determineNetwork checks if unix socket is configured
@@ -278,6 +302,12 @@ func getAppFlags() []cli.Flag {
 			Name:    "proxy-header",
 			Usage:   "The remote IP address used by the bark server http header",
 			EnvVars: []string{"BARK_SERVER_PROXY_HEADER"},
+			Value:   "",
+		},
+		&cli.StringFlag{
+			Name:    "gotify-client-token",
+			Usage:   "Gotify-compatible client token for hotify-bridge monitoring; auto-generated and persisted if empty",
+			EnvVars: []string{"BARK_SERVER_GOTIFY_CLIENT_TOKEN"},
 			Value:   "",
 		},
 		&cli.IntFlag{
