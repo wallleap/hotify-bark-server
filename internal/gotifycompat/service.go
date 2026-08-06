@@ -151,6 +151,17 @@ func (s *Service) Messages(limit int, since uint64) ([]Message, error) {
 	return s.store.Recent(limit, since)
 }
 
+// DeleteMessage removes the message with the given ID; the bool reports
+// whether it existed (used to answer 404 like gotify does).
+func (s *Service) DeleteMessage(id uint64) (bool, error) {
+	return s.store.Delete(id)
+}
+
+// DeleteAllMessages removes every stored message.
+func (s *Service) DeleteAllMessages() error {
+	return s.store.DeleteAll()
+}
+
 // Subscribe registers a live message consumer. The returned channel is closed
 // by the returned unsubscribe func.
 func (s *Service) Subscribe() (<-chan Message, func()) {

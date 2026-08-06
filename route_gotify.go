@@ -19,6 +19,10 @@ func init() {
 		router.Get("/version", routeGotifyVersion)
 		// Read/history endpoint used by hotify-bridge backfill & watermark init.
 		router.Get("/message", routeGotifyMessage)
+		// Delete endpoints: single id or wipe-all, token-authenticated like
+		// gotify's DELETE /message and DELETE /message/:id.
+		router.Delete("/message", routeGotifyMessageDeleteAll)
+		router.Delete("/message/:id", routeGotifyMessageDeleteOne)
 		// Live subscription endpoint used by hotify-bridge /stream monitoring.
 		router.Get("/stream", routeGotifyStreamUpgrade, fiberws.New(routeGotifyStream))
 	})
@@ -81,6 +85,44 @@ func routeGotifyMessage(c *fiber.Ctx) error {
 		},
 		"messages": messages,
 	})
+}
+
+// routeGotifyMessageDeleteAll wipes the whole message history (gotify's
+// DELETE /message), token-authenticated.
+func routeGotifyMessageDeleteAll(c *fiber.Ctx) error {
+	if gotifyService == nil {
+		return c.Status(503).JSON(failed(503, "gotify compat not initialized"))
+	}
+	if !gotifyService.ValidateToken(gotifyToken(c)) {
+		return c.Status(401).JSON(failed(401, "unauthorized"))
+	}
+	if err := gotifyService.DeleteAllMessages(); err != nil {
+		return c.Status(500).JSON(failed(500, "delete messages failed: %v", err))
+	}
+	return c.JSON(success())
+}
+
+// routeGotifyMessageDeleteOne removes a single message (gotify's
+// DELETE /message/:id); 404 when the id does not exist.
+func routeGotifyMessageDeleteOne(c *fiber.Ctx) error {
+	if gotifyService == nil {
+		return c.Status(503).JSON(failed(503, "gotify compat not initialized"))
+	}
+	if !gotifyService.ValidateToken(gotifyToken(c)) {
+		return c.Status(401).JSON(failed(401, "unauthorized"))
+	}
+	id, err := strconv.ParseUint(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(failed(400, "invalid message id: %v", err))
+	}
+	existed, err := gotifyService.DeleteMessage(id)
+	if err != nil {
+		return c.Status(500).JSON(failed(500, "delete message failed: %v", err))
+	}
+	if !existed {
+		return c.Status(404).JSON(failed(404, "message not found"))
+	}
+	return c.JSON(success())
 }
 
 // routeGotifyStreamUpgrade validates the token before the WebSocket upgrade so

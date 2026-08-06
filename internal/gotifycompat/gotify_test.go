@@ -348,3 +348,118 @@ func TestMessageJSONWireShape(t *testing.T) {
 		t.Fatalf("unexpected extras: %s", got["extras"])
 	}
 }
+
+// buildMemoryFallbackService returns a Service backed by the degraded
+// in-memory store (unusable data dir).
+func buildMemoryFallbackService(t *testing.T) *Service {
+	t.Helper()
+	dir := t.TempDir()
+	blocker := filepath.Join(dir, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatalf("write blocker: %v", err)
+	}
+	svc, err := Init(Config{DataDir: filepath.Join(blocker, "sub"), ClientToken: ""})
+	if err != nil {
+		t.Fatalf("Init on unusable dir: %v", err)
+	}
+	return svc
+}
+
+func publishN(t *testing.T, svc *Service, n int) {
+	t.Helper()
+	for i := 0; i < n; i++ {
+		if err := svc.Publish("t", "b", 0, nil); err != nil {
+			t.Fatalf("Publish: %v", err)
+		}
+	}
+}
+
+// TestDeleteMessage covers single-message deletion: existence result, what
+// remains, and that the ID sequence keeps increasing afterwards.
+func TestDeleteMessage(t *testing.T) {
+	svc := buildTestService(t, "")
+	publishN(t, svc, 3)
+
+	ok, err := svc.DeleteMessage(2)
+	if err != nil {
+		t.Fatalf("DeleteMessage: %v", err)
+	}
+	if !ok {
+		t.Fatal("message 2 should exist")
+	}
+
+	msgs, _ := svc.Messages(100, 0)
+	if len(msgs) != 2 {
+		t.Fatalf("want 2 messages after delete, got %d", len(msgs))
+	}
+	if msgs[0].ID != 3 || msgs[1].ID != 1 {
+		t.Fatalf("unexpected remaining messages: %+v", msgs)
+	}
+
+	ok, err = svc.DeleteMessage(99)
+	if err != nil {
+		t.Fatalf("DeleteMessage(99): %v", err)
+	}
+	if ok {
+		t.Fatal("message 99 must not exist")
+	}
+
+	// sequence continues after delete (bbolt NextSequence never goes back)
+	if err := svc.Publish("t", "b", 0, nil); err != nil {
+		t.Fatalf("Publish after delete: %v", err)
+	}
+	msgs, _ = svc.Messages(1, 0)
+	if msgs[0].ID != 4 {
+		t.Fatalf("id after delete should be 4, got %d", msgs[0].ID)
+	}
+}
+
+// TestDeleteAllMessages covers wiping the whole history while keeping the ID
+// sequence monotonic.
+func TestDeleteAllMessages(t *testing.T) {
+	svc := buildTestService(t, "")
+	publishN(t, svc, 3)
+
+	if err := svc.DeleteAllMessages(); err != nil {
+		t.Fatalf("DeleteAllMessages: %v", err)
+	}
+	msgs, _ := svc.Messages(100, 0)
+	if len(msgs) != 0 {
+		t.Fatalf("want 0 messages after DeleteAll, got %d", len(msgs))
+	}
+
+	if err := svc.Publish("t", "b", 0, nil); err != nil {
+		t.Fatalf("Publish after DeleteAll: %v", err)
+	}
+	msgs, _ = svc.Messages(1, 0)
+	if msgs[0].ID != 4 {
+		t.Fatalf("id after DeleteAll should continue from 4, got %d", msgs[0].ID)
+	}
+}
+
+// TestDeleteOnMemoryStore exercises single + bulk deletion on the degraded
+// in-memory store.
+func TestDeleteOnMemoryStore(t *testing.T) {
+	svc := buildMemoryFallbackService(t)
+	publishN(t, svc, 3)
+
+	ok, err := svc.DeleteMessage(2)
+	if err != nil {
+		t.Fatalf("DeleteMessage: %v", err)
+	}
+	if !ok {
+		t.Fatal("message 2 should exist")
+	}
+	msgs, _ := svc.Messages(100, 0)
+	if len(msgs) != 2 || msgs[0].ID != 3 || msgs[1].ID != 1 {
+		t.Fatalf("unexpected remaining after single delete: %+v", msgs)
+	}
+
+	if err := svc.DeleteAllMessages(); err != nil {
+		t.Fatalf("DeleteAllMessages: %v", err)
+	}
+	msgs, _ = svc.Messages(100, 0)
+	if len(msgs) != 0 {
+		t.Fatalf("want 0 after DeleteAll on memory store, got %d", len(msgs))
+	}
+}

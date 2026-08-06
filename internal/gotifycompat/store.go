@@ -20,6 +20,11 @@ type Store interface {
 	// Recent returns up to limit messages with ID < since, ordered by ID
 	// descending (newest first). since==0 disables the filter.
 	Recent(limit int, since uint64) ([]Message, error)
+	// Delete removes the message with the given ID; the bool reports whether
+	// it existed. The ID sequence is never reused.
+	Delete(id uint64) (bool, error)
+	// DeleteAll removes every stored message.
+	DeleteAll() error
 
 	TokenHash() ([]byte, error)
 	SetTokenHash(h []byte) error
@@ -148,6 +153,44 @@ func (s *bboltStore) Recent(limit int, since uint64) ([]Message, error) {
 	return out, err
 }
 
+func (s *bboltStore) Delete(id uint64) (bool, error) {
+	var existed bool
+	err := s.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(bucketMessages))
+		mb := tx.Bucket([]byte(bucketMeta))
+		k := uint64Bytes(id)
+		if b.Get(k) == nil {
+			return nil // not exists
+		}
+		existed = true
+		if err := b.Delete(k); err != nil {
+			return err
+		}
+		count := metaUint64(mb, keyCount)
+		if count > 0 {
+			count--
+		}
+		return mb.Put(keyCount, uint64Bytes(count))
+	})
+	return existed, err
+}
+
+func (s *bboltStore) DeleteAll() error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		// Delete keys in place: recreating the bucket would reset its
+		// NextSequence counter, breaking ID monotonicity. Keep the bucket so
+		// IDs keep increasing across a bulk delete (never reused).
+		b := tx.Bucket([]byte(bucketMessages))
+		c := b.Cursor()
+		for k, _ := c.First(); k != nil; k, _ = c.First() {
+			if err := c.Delete(); err != nil {
+				return err
+			}
+		}
+		return tx.Bucket([]byte(bucketMeta)).Put(keyCount, uint64Bytes(0))
+	})
+}
+
 func (s *bboltStore) TokenHash() ([]byte, error) {
 	var out []byte
 	err := s.db.View(func(tx *bolt.Tx) error {
@@ -236,6 +279,31 @@ func (s *memoryStore) Recent(limit int, since uint64) ([]Message, error) {
 		out = append(out, s.msgs[id])
 	}
 	return out, nil
+}
+
+func (s *memoryStore) Delete(id uint64) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.msgs[id]; !ok {
+		return false, nil
+	}
+	delete(s.msgs, id)
+	for i, oid := range s.order {
+		if oid == id {
+			s.order = append(s.order[:i], s.order[i+1:]...)
+			break
+		}
+	}
+	return true, nil
+}
+
+func (s *memoryStore) DeleteAll() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.msgs = make(map[uint64]Message)
+	s.order = nil
+	// seq intentionally keeps increasing so IDs stay monotonic across clears.
+	return nil
 }
 
 func (s *memoryStore) TokenHash() ([]byte, error) {
