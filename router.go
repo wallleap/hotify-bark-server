@@ -69,7 +69,10 @@ func registerRouteWithWeight(name string, weight int, f func(router fiber.Router
 func routerSetup(router fiber.Router) {
 	routerOnce.Do(func() {
 		router.Use(fiberlogger.New(fiberlogger.Config{
-			Format:     "${time}     INFO    ${ip} -> [${status}] ${method} ${latency} ${route} => ${url} ${body}\n",
+			// Use ${path} (no query string) instead of ${url}: the gotify
+			// compat endpoints accept ?token= and it must never land in the
+			// access log. Prefer header-based tokens (X-Gotify-Key / Bearer).
+			Format:     "${time}     INFO    ${ip} -> [${status}] ${method} ${latency} ${route} => ${path}\n",
 			TimeFormat: "2006-01-02 15:04:05",
 			Output:     os.Stdout,
 		}))
