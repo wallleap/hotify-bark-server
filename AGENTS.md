@@ -1,0 +1,49 @@
+# AGENTS.md — hotify-bark-server
+
+Bark 服务端（Finb/bark-server）的独立 fork：Go + Fiber v2 的 iOS (APNs) 推送服务，扩展了 Gotify 兼容监控接口（供 hotify-bridge 推 HarmonyOS）和 MCP 接口。不向上游回同步；二进制/镜像/module 均已独立命名。改动清单见 `docs/DIFFERENCES.md`。
+
+## Project
+- 入口：根目录 `package main`（`main.go`），urfave/cli v2 定义参数（`BARK_SERVER_*` 环境变量），fiber.New 构建应用。
+- 模块路径：`github.com/wallleap/hotify-bark-server`，go.mod `go 1.25.5`（README 里的 "Go 1.18+" 已过时，以 go.mod 为准）。
+- 推送链路：HTTP → `routeDoPush`（JSON→V2 / 其他→V1）→ `push()` → `db.DeviceTokenByKey` → `gotifyPublish` → `apns.Push`。
+
+## Commands
+- 构建：`go build ./...`；本地二进制 `bin/build`（输出 `dist/hotify-bark-server`）；全平台交叉编译 `task`，单平台如 `task linux_amd64`。
+- 运行：`go run . --data ./dev-data`（默认监听 `0.0.0.0:8080`，数据目录默认 `/data` 需可写）；docker compose：`bin/up` / `bin/down`（本地镜像）。
+- 测试：`go test ./internal/gotifycompat/` ✅ 可直接跑；**`go test ./...` 会失败**——`push_test.go` 的 `TestMain` 要求手填有效 `deviceToken` 常量（当前为空会 panic）。
+- 静态检查：`go vet ./...` 当前干净（此前 `apns/apns.go:147` 非恒定格式串已修复）。
+
+## Architecture
+- `apns/` — APNs 推送客户端：`apns.go`（PushMessage、Push、客户端池）、`apns_certs.go`（证书/JWT 鉴权）。全局客户端数由 `--max-apns-client-count` 控制。**`apns_certs.go` 内置 Bark 的 APNs p8 私钥**（`keyID`/`teamID` 常量 + 私钥）——"服务端代发"架构、上游设计，不是密钥泄漏，勿移除。
+- `database/` — `Database` 接口（`database.go`）+ 实现：`bbolt.go`（默认）、`mysql.go`（`--dsn`）、`membase.go` / `envbase.go`（测试 / serverless）。
+- `internal/gotifycompat/` — Gotify 兼容监控：`service.go`（Init/ValidateToken/Publish）、`store.go`（bbolt 持久化，不可用则内存降级）、`hub.go`（WebSocket 扇出）、`token.go`（token 生成/hash）。数据在 `<data>/gotify.db`。
+- 根目录路由文件（`package main`，各自 `init()` 中 `registerRoute` 注册）：`route_push.go`（V1/V2、批量推送）、`route_register.go`、`route_gotify.go`（`/version`、`/message`、`/stream`）、`route_mcp.go`（`/mcp`、`/mcp/:device_key`）、`route_misc.go`、`route_auth.go`（可选 Basic Auth）。
+- 认证模型：`/push`、`/:device_key` 兼容推送、`/mcp*` **无独立认证**（device_key 即凭证）；`/message`、`/stream` 用 gotify client token（恒定时间比较，`/version` 无需认证）；Basic Auth 开启时白名单 `authFreeRouters`（`route_auth.go` 包级变量：`/ping /register /healthz /version /message /stream`）经 `isAuthFreePath` 按**精确路径/子路径**匹配放行——勿改回裸前缀匹配，否则 `/messageevil` 类路径会被放行（曾为此出过 auth bypass）。
+- `router.go` — 路由注册表（`registerRoute` / `registerRouteWithWeight`，按 weight 降序）+ 通用响应 `CommonResp`（`success()` / `failed()` / `data()`）+ fiber logger/recover 中间件。
+
+## Conventions
+- 新增路由：在根目录新建 `route_*.go`，`init()` 里调 `registerRoute(name, func(router fiber.Router){...})`；带权重的用 `registerRouteWithWeight`（0–100，名字不区分大小写且不可重复）。
+- 响应统一用 `CommonResp` 助手（`success()` / `failed(code, msg, ...)` / `data(v)`），失败时 `c.Status(code).JSON(...)` 返回。
+- 日志用 `github.com/mritd/logger`（`logger.Infof/Errorf/...`），不要用标准库 log。
+- JSON 序列化统一 jsoniter（fiber `JSONEncoder` 已配置）。
+- CLI 参数风格：urfave/cli 的 `StringFlag/BoolFlag/IntFlag`，`EnvVars: []string{"BARK_SERVER_*"}`，大小写转换参数名。
+- gotifycompat 的降级原则：存储不可用 → 内存降级，日志记录，**绝不致命**（参考 `service.go` Init）。
+
+## Testing
+- **先写测试用例，再实现功能**（TDD）：新功能或修复先补失败用例，实现到变绿再收工；不要"先实现后补测"。
+- 用例要全面：正常路径 + 边界（空值、上限、非法输入）+ 错误/降级路径（存储不可用、token 无效、APNs 错误码等），参考 `internal/gotifycompat/gotify_test.go` 的覆盖风格。
+- 包选择约束：`package main` 的测试受 `push_test.go` `TestMain` 的 `deviceToken` 门槛约束（未填会 panic，见 Commands）——**可测逻辑优先放 `internal/` 包，或提取为纯函数**（如 `route_auth.go` 的 `isAuthFreePath`），保证测试可直接运行。
+- 运行：`go test ./internal/gotifycompat/`（可直接跑）；package main 测试需先填 `push_test.go` 的 `deviceToken` 常量。
+
+## Constraints
+- **提交前门禁**：`go build ./...` + `go vet ./...` + `go test ./internal/gotifycompat/` 必须全绿（package main 测试受 `deviceToken` 门槛限制，见 Commands）。
+- **提交信息**用 conventional commits（`feat:`/`fix:`/`docs:`/`chore:`/`build:`，可带 scope，如 `chore(deps):`）——与仓库现有历史保持一致。
+- **错误处理**：一律 wrap 后向上传播（`fmt.Errorf("...: %w", err)`），不吞错；对外错误信息用 `failed(code, msg, ...)` 统一返回。
+- **敏感信息**：client token、密码、device_token 默认不写日志、不进提交；token 的"首次启动打印一次"是刻意设计（见 Notes），其余场景不打印。
+- **文档同步**：新接口/新功能同步更新 `docs/`（README 文档列表里的对应文档）与 `docs/DIFFERENCES.md`（相对上游的改动清单）。
+- **改动聚焦**：一次改动解决一个问题，不顺手重构无关代码；新逻辑优先放 `internal/` 包（可测性，见 Testing）。
+- **分步提交**：一次提交只含一个逻辑单元（按步骤/功能拆分 commit），不把无关改动塞进同一 commit；每步提交后仓库保持可构建（`go build ./...` 通过）。
+
+## Notes
+- gotify client token 打印策略：未预置时首次启动打印一次；重启后不打印（防日志泄漏），日志提示持久化位置；数据目录不可用降级内存存储时每次启动重新生成并打印。
+- `docs/TOKENS.md` 说明 device_token / device_key / client token 三者区别与生成方式。
