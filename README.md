@@ -116,7 +116,7 @@ systemctl enable --now hotify-bark-server
 
 本 fork 的 Gotify 兼容接口供 [hotify-bridge](https://github.com/wallleap/hotify-bark-server) 监测推送。部署时：
 
-1. 设置 `BARK_SERVER_GOTIFY_CLIENT_TOKEN`（否则首次启动会在日志打印自动生成的 token）。
+1. 设置 `BARK_SERVER_GOTIFY_CLIENT_TOKEN`（**强烈推荐预置**：预置时服务端只存 SHA-256 哈希、不落明文凭证；不设置时自动生成的 token 明文会写进 `<data>/gotify.db`，且仅首次启动在日志打印一次）。
 2. 在 hotify-bridge 的 `bridge_config.yaml` 填入：
    ```yaml
    gotify_url: http://<bark-host>:18080
