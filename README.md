@@ -7,6 +7,11 @@ Hotify-Bark Server 是 [Bark](https://github.com/Finb/Bark) 服务端（[Finb/ba
 - iOS 需下载 Bark
 - HarmonyOS 需下载 Hotify
 
+TODO:
+
+- [ ] 实现删除消息接口，DELETE `/message`、`/message/:id`，要认证（优先级低）
+- [ ] 更详细的教程，token、key 填写到哪里（优先级中）
+
 ## 与原项目的区别
 
 - 独立的 Go module、二进制名与 Docker 镜像名（`wallleap/hotify-bark-server`）
@@ -176,6 +181,7 @@ PLATFORM=linux/amd64,linux/arm64 bin/publish   # 指定架构
 * [API_V2.md](./docs/API_V2.md) — 推送 API
 * [GOTIFY_COMPAT.md](./docs/GOTIFY_COMPAT.md) — Gotify 兼容监控接口
 * [MCP.md](./docs/MCP.md) — MCP 推送接口
+* [TOKENS.md](./docs/TOKENS.md) — device_token、device_key、client token 是什么及如何生成
 * [DIFFERENCES.md](./docs/DIFFERENCES.md) — 相对上游的改动清单
 
 ## License

@@ -1,0 +1,47 @@
+# device_token、device_key 与 client token 说明
+
+本服务端涉及三种"凭证"，分别服务于不同的链路，容易混淆，这里统一说明它们是什么、由谁生成、用在哪里。
+
+## 1. device_token（iOS 设备令牌）
+
+- **是什么**：Apple APNs 分配给**每一台 iOS 设备 + 每一个 App** 的唯一推送地址。Bark App 注册 APNs 成功后，系统会返回一段 64 字节的十六进制字符串（约 128 个字符），这就是 device_token。
+- **谁生成**：**iOS 系统**（通过 APNs 注册流程），服务端**不生成**、也无法伪造。
+- **用在哪**：Bark App 启动后调用 `POST /register`（或兼容的 `GET /register?devicetoken=...`）把 device_token 上报给服务端；服务端存储它，推送时把它作为 APNs 投递目标。
+- **怎么查看**：在 Bark App 内查看（通常位于"设置 → 更多/设备信息"，或 App 展示的推送 URL 里）。
+- **注意**：device_token 会因重装 App、恢复系统等原因失效。服务端在推送返回 `410 BadDeviceToken` 时会自动清除该设备的记录，需要重新注册。
+
+## 2. device_key（设备 key，即 Bark URL 里的那段）
+
+- **是什么**：设备的**短标识**，注册时由**用户自定义**或由**服务端生成**。推送时用它定位 device_token，不需要在每次推送时携带 128 字符的 device_token。
+- **谁生成**：
+  - 用户注册时**指定** `key`（如 `mydemo`）：服务端原样保存。
+  - 用户**不指定**：服务端用 `shortuuid` 生成一个随机 key（`database/bbolt.go`、`database/mysql.go` 中的 `SaveDeviceTokenByKey`）。
+- **用在哪**：推送 URL 的路径段与 `device_key` 参数，例如 `GET /mydemo/标题/内容` 或 `POST /push` 的 JSON 里 `"device_key": "mydemo"`；也是旧版兼容推送路由 `/:device_key` 的凭证。注册成功响应会同时返回 `key` 和 `device_key`（同一个值）。
+- **⚠️ 安全提示**：**device_key 就是推送凭证**——任何人拿到你的 Bark URL（含 key）就能向你的设备推送。不要在公开渠道晒 Bark 推送 URL。它是"设备级"凭证，与 client token 无关。
+
+## 3. client token（gotify 兼容接口令牌）
+
+- **是什么**：访问 Gotify 兼容监控接口（`/message`、`/stream`，供 hotify-bridge 监测推送）的令牌。
+- **谁生成**：两种方式：
+  1. **推荐——预置**：启动时设置环境变量 `BARK_SERVER_GOTIFY_CLIENT_TOKEN` 或参数 `--gotify-client-token`。服务端**只保存 SHA-256 哈希**，不落明文；token 本身由你指定（比如用 `openssl rand -base64 32` 生成）。
+  2. **自动生成**：未设置时，服务端用 `crypto/rand` 生成 32 字节随机数并做 base64url 编码（43 字符），**首次启动时在日志打印一次**（`internal/gotifycompat/token.go`、`service.go`）。明文会以 0600 权限存进 `<data>/gotify.db` 以保持重启稳定。
+- **用在哪**：hotify-bridge 的 `bridge_config.yaml` 里 `gotify_token`（或环境变量 `GOTIFY_CLIENT_TOKEN`）。
+- **重启后怎么拿回自动生成的 token**：出于防日志泄漏考虑，自动生成的 token **只在生成那一刻打印一次**，重启后不再打印。此时日志会提示 token 已持久化在 `<data>/gotify.db`。若丢失，二选一：
+  - 用环境变量/参数**固定**一个 token（推荐）；
+  - 停止服务后**删除 `<data>/gotify.db`** 再启动，重新生成（会同时清空监控消息历史）。
+  - 例外：若数据目录不可用，服务退化为内存存储，每次启动都会**重新生成并打印**一次 token，但重启后即失效——这种部署应使用预置 token。
+- **⚠️ 安全提示**：client token 能读取全部监控消息并订阅实时流，泄露后请用预置方式更换（operator token 生效时旧的明文记录会被自动清除）。
+
+## 三者关系与接口认证一览
+
+| 凭证 | 用途 | 谁生成 | 认证哪些接口 |
+|---|---|---|---|
+| device_token | APNs 投递目标 | iOS 系统 | `/register` 上报，推送时由服务端内部使用 |
+| device_key | 定位设备、推送凭证 | 用户或服务端（shortuuid） | `/push`、`/:device_key` 兼容推送、`/mcp`、`/mcp/:device_key` |
+| client token | 监控接口访问 | 用户预置或服务端自动生成 | `/message`、`/stream`（`/version` 无需认证） |
+
+补充说明（均属上游设计，非本 fork 引入）：
+
+- **MCP 接口与 push 等价**，以 device_key 为凭证，无独立认证。开启 Basic Auth（`--user`/`--password`）后 `/mcp`、`/push` 会被保护（白名单只放行 `/ping`、`/register`、`/healthz`、`/version`、`/message`、`/stream`）。
+- **Basic Auth 配置注意**：`--user` 有值而 `--password` 为空时，除白名单外所有请求都会被拒绝。
+- 服务端内置了 Bark App 的 APNs p8 私钥（`apns/apns_certs.go`），这是"服务端代发"架构——任何运行本服务端的人都能以 Bark App 名义发推送，请只在你信任的主机上部署。
