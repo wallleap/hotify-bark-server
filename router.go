@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -66,15 +68,33 @@ func registerRouteWithWeight(name string, weight int, f func(router fiber.Router
 	})
 }
 
+// tokenParamRe matches a token query parameter together with its leading
+// '?' or '&', so the value can be masked in logs. token values are
+// base64url, so [^&\s]* covers the whole value.
+var tokenParamRe = regexp.MustCompile(`([?&]token=)[^&\s]*`)
+
+// redactingWriter masks the value of the "token" query parameter in whatever
+// it forwards, e.g. /stream?token=<clientToken> is logged as ?token=***.
+// Other query params and the request body pass through untouched.
+type redactingWriter struct{ w io.Writer }
+
+func (r redactingWriter) Write(p []byte) (int, error) {
+	redacted := tokenParamRe.ReplaceAll(p, []byte(`${1}***`))
+	if _, err := r.w.Write(redacted); err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
 func routerSetup(router fiber.Router) {
 	routerOnce.Do(func() {
 		router.Use(fiberlogger.New(fiberlogger.Config{
-			// Use ${path} (no query string) instead of ${url}: the gotify
-			// compat endpoints accept ?token= and it must never land in the
-			// access log. Prefer header-based tokens (X-Gotify-Key / Bearer).
-			Format:     "${time}     INFO    ${ip} -> [${status}] ${method} ${latency} ${route} => ${path}\n",
+			// Keep the full URL and body in the log, but mask the value of
+			// the gotify token query param (?token=<clientToken> → ?token=***)
+			// so the credential never lands on disk.
+			Format:     "${time}     INFO    ${ip} -> [${status}] ${method} ${latency} ${route} => ${url} ${body}\n",
 			TimeFormat: "2006-01-02 15:04:05",
-			Output:     os.Stdout,
+			Output:     redactingWriter{w: os.Stdout},
 		}))
 		router.Use(fiberrecover.New())
 		sort.Sort(routes)
