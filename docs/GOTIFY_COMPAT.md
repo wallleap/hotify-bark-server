@@ -33,6 +33,9 @@ iOS 侧投递成败**不影响**这条监测流（hotify-bridge 拿到消息后�
 - `date` 为 RFC3339Nano 字符串，桥按不透明字符串透传。
 - `priority` 由 bark 的 `level` 映射：`critical`/`timeSensitive`→2、`active`→1、其余→0。
 - token 读取优先级：`?token=` → `X-Gotify-Key` 头 → `Authorization: Bearer`（与 Gotify 相同）。
+  **推荐用 header 传递**（`X-Gotify-Key` 或 `Authorization: Bearer`）：token 不进入 URL，也就不会出现在
+  代理/网关与访问日志里（本服务端访问日志只记路径，不记 query）。生产部署务必启用 TLS
+  （`--cert`/`--key` 或反向代理），否则任何 token 传递方式在网络层都是明文。
 - 未授权访问 `/message`、`/stream` 返回 `401`（WebSocket 在握手阶段返回 401）。
 
 ## 客户端 token

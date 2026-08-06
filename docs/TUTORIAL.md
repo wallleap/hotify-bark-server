@@ -77,14 +77,15 @@ gotify_token: <上面预置的 client token>
 
 或环境变量 `GOTIFY_HTTP_URL` / `GOTIFY_CLIENT_TOKEN`。
 
-**验证监控链路**：
+**验证监控链路**（用 header 传 token，避免 token 出现在 URL 与日志）：
 
 ```sh
-curl "http://<host>:18080/version"                    # 无需认证，返回版本
-curl "http://<host>:18080/message?token=<clientToken>" # 应返回 {"messages":[...]}
-curl "http://<host>:18080/message?token=<clientToken>" \
-     -X DELETE                                      # 清空历史（可选）
+curl "http://<host>:18080/version"                             # 无需认证，返回版本
+curl -H "X-Gotify-Key: <clientToken>" "http://<host>:18080/message"   # 应返回 {"messages":[...]}
+curl -X DELETE -H "X-Gotify-Key: <clientToken>" "http://<host>:18080/message"  # 清空历史（可选）
 ```
+
+> `?token=` 查询参数也支持（gotify 协议兼容），但会进入 URL/访问日志——生产环境请用 header 并启用 TLS（`--cert`/`--key` 或反向代理），否则 token 在网络层是明文传输。
 
 ## 5. 三种凭证一览（填哪里速查）
 
