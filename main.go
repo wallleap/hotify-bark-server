@@ -72,9 +72,15 @@ func initGotifyCompat(c *cli.Context) {
 		return
 	}
 	gotifyService = svc
-	if tok := svc.ClientToken(); tok != "" {
-		logger.Infof("Gotify-compatible stream ready. Generated client token (set bridge gotify_token to this): %s", tok)
-	} else {
+
+	switch svc.TokenSource() {
+	case gotifycompat.TokenSourceOperator:
+		logger.Info("Gotify-compatible stream ready. Using operator-supplied client token.")
+	case gotifycompat.TokenSourceGenerated:
+		logger.Infof("Gotify-compatible stream ready. Generated client token (set bridge gotify_token to this): %s", svc.ClientToken())
+	case gotifycompat.TokenSourcePersisted:
+		logger.Info("Gotify-compatible stream ready. Client token persisted in <data>/gotify.db; pin it via BARK_SERVER_GOTIFY_CLIENT_TOKEN, or delete that file to regenerate.")
+	default:
 		logger.Info("Gotify-compatible stream ready.")
 	}
 }

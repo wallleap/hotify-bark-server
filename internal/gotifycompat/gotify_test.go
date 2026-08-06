@@ -2,6 +2,8 @@ package gotifycompat
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -43,6 +45,69 @@ func TestInitGeneratesAndPersistsToken(t *testing.T) {
 	}
 	if svc.ValidateToken("wrong-token") {
 		t.Fatal("wrong token must not validate")
+	}
+	if svc.TokenSource() != TokenSourceGenerated {
+		t.Fatalf("want TokenSourceGenerated, got %v", svc.TokenSource())
+	}
+}
+
+// TestInitWithUnusableDataDirFallsBackToMemory guards the "first boot logs
+// nothing" symptom: when the data dir cannot be used, Init must still succeed
+// on the in-memory store, generate a token and keep the interface usable.
+func TestInitWithUnusableDataDirFallsBackToMemory(t *testing.T) {
+	dir := t.TempDir()
+	blocker := filepath.Join(dir, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatalf("write blocker: %v", err)
+	}
+	// MkdirAll fails because a regular file sits where a dir would be created.
+	svc, err := Init(Config{DataDir: filepath.Join(blocker, "sub"), ClientToken: ""})
+	if err != nil {
+		t.Fatalf("Init must not fail when the store is unusable: %v", err)
+	}
+	if svc.ClientToken() == "" {
+		t.Fatal("expected a generated token even on memory fallback")
+	}
+	if !svc.ValidateToken(svc.ClientToken()) {
+		t.Fatal("generated token must validate")
+	}
+	if svc.TokenSource() != TokenSourceGenerated {
+		t.Fatalf("want TokenSourceGenerated, got %v", svc.TokenSource())
+	}
+	if err := svc.Publish("t", "b", 0, nil); err != nil {
+		t.Fatalf("Publish on memory store: %v", err)
+	}
+}
+
+func TestTokenSourceAfterReopen(t *testing.T) {
+	dir := t.TempDir()
+	svc1, err := Init(Config{DataDir: dir, ClientToken: ""})
+	if err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	if svc1.TokenSource() != TokenSourceGenerated {
+		t.Fatalf("want Generated on first boot, got %v", svc1.TokenSource())
+	}
+	if err := svc1.store.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	svc2, err := Init(Config{DataDir: dir, ClientToken: ""})
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	if svc2.TokenSource() != TokenSourcePersisted {
+		t.Fatalf("want Persisted after reopen, got %v", svc2.TokenSource())
+	}
+	if svc2.ClientToken() != "" {
+		t.Fatal("persisted token must not be re-logged on restart")
+	}
+}
+
+func TestTokenSourceOperator(t *testing.T) {
+	svc := buildTestService(t, "secret")
+	if svc.TokenSource() != TokenSourceOperator {
+		t.Fatalf("want TokenSourceOperator, got %v", svc.TokenSource())
 	}
 }
 
@@ -192,6 +257,34 @@ func TestTokenOverridePersistsHash(t *testing.T) {
 	}
 	if !svc2.ValidateToken("secret") {
 		t.Fatal("hash must persist across restart")
+	}
+}
+
+// TestOperatorOverrideClearsStaleAutoToken verifies that switching to an
+// operator-supplied token wipes the plaintext of a previously auto-generated
+// one from the store.
+func TestOperatorOverrideClearsStaleAutoToken(t *testing.T) {
+	dir := t.TempDir()
+	svc1, err := Init(Config{DataDir: dir, ClientToken: ""})
+	if err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	if raw, _ := svc1.store.AutoToken(); raw == "" {
+		t.Fatal("expected persisted plaintext autoToken after first boot")
+	}
+	if err := svc1.store.(*bboltStore).Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	svc2, err := Init(Config{DataDir: dir, ClientToken: "secret"})
+	if err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	if raw, _ := svc2.store.AutoToken(); raw != "" {
+		t.Fatalf("stale autoToken not cleared: %q", raw)
+	}
+	if !svc2.ValidateToken("secret") {
+		t.Fatal("operator token must validate")
 	}
 }
 

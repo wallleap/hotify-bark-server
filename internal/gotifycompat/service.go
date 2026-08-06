@@ -20,13 +20,28 @@ const (
 	defaultAppID       = 1
 )
 
+// TokenSource describes where the client token came from; it drives what the
+// startup log may safely reveal.
+type TokenSource int
+
+const (
+	// TokenSourceOperator: operator-supplied (env var / flag); never logged.
+	TokenSourceOperator TokenSource = iota
+	// TokenSourceGenerated: auto-generated in this process; logged once.
+	TokenSourceGenerated
+	// TokenSourcePersisted: loaded from the store; not re-logged (would leak it
+	// into every restart's logs).
+	TokenSourcePersisted
+)
+
 // Service ties together token auth, message persistence and the WebSocket hub.
 type Service struct {
-	store     Store
-	hub       *Hub
-	tokenHash []byte
-	autoToken string
-	version   string
+	store       Store
+	hub         *Hub
+	tokenHash   []byte
+	autoToken   string
+	version     string
+	tokenSource TokenSource
 }
 
 // Init creates the service. It never fails outright for storage reasons:
@@ -57,10 +72,19 @@ func Init(cfg Config) (*Service, error) {
 
 	if cfg.ClientToken != "" {
 		hash := hashToken(cfg.ClientToken)
+		// best-effort persistence: an unusable store (degraded in-memory) must
+		// never take down the monitoring interface.
 		if err := store.SetTokenHash(hash); err != nil {
-			return nil, fmt.Errorf("persist token hash: %w", err)
+			logger.Warnf("monitor: could not persist token hash: %v", err)
+		}
+		// Clear any stale plaintext from a previously auto-generated token now
+		// that the operator token takes over (validation only ever uses the
+		// hash, but the file should not carry a dead secret).
+		if ptErr := store.SetAutoToken(""); ptErr != nil {
+			logger.Warnf("monitor: could not clear stale auto client token: %v", ptErr)
 		}
 		svc.tokenHash = hash
+		svc.tokenSource = TokenSourceOperator
 		// Operator-supplied token: never logged.
 		return svc, nil
 	}
@@ -68,7 +92,9 @@ func Init(cfg Config) (*Service, error) {
 	// Auto-generated token: prefer the persisted one for stability across restarts.
 	hash, err := store.TokenHash()
 	if err != nil {
-		return nil, fmt.Errorf("load token hash: %w", err)
+		// Treat as missing and regenerate below: persistence is best-effort,
+		// so a read failure must not take the interface down either.
+		logger.Warnf("monitor: could not load token hash: %v", err)
 	}
 	if len(hash) == 0 {
 		tok, err := generateToken()
@@ -76,15 +102,22 @@ func Init(cfg Config) (*Service, error) {
 			return nil, fmt.Errorf("generate token: %w", err)
 		}
 		h := hashToken(tok)
-		// best-effort persistence of the plaintext for recovery & stability
+		// best-effort persistence of the plaintext for recovery & stability.
+		// A failure (e.g. degraded in-memory store) is never fatal: the token
+		// then lives for this process only and is re-generated (and re-logged)
+		// on the next start — this also fixes the "first boot logs nothing"
+		// symptom when the data dir is unusable.
 		if err := store.SetTokenHash(h); err != nil {
-			return nil, fmt.Errorf("persist token hash: %w", err)
+			logger.Warnf("monitor: could not persist token hash: %v", err)
 		}
 		if ptErr := store.SetAutoToken(tok); ptErr != nil {
 			logger.Warnf("monitor: could not persist auto client token: %v", ptErr)
 		}
 		hash = h
 		svc.autoToken = tok
+		svc.tokenSource = TokenSourceGenerated
+	} else {
+		svc.tokenSource = TokenSourcePersisted
 	}
 	svc.tokenHash = hash
 	return svc, nil
@@ -100,6 +133,11 @@ func (s *Service) ValidateToken(token string) bool {
 // for operator-supplied or pre-existing tokens.
 func (s *Service) ClientToken() string {
 	return s.autoToken
+}
+
+// TokenSource reports where the client token came from.
+func (s *Service) TokenSource() TokenSource {
+	return s.tokenSource
 }
 
 // Version returns the value served on GET /version.
