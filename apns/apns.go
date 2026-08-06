@@ -3,6 +3,7 @@ package apns
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"net/http"
 	"runtime"
@@ -119,8 +120,11 @@ func Push(msg *PushMessage) (code int, err error) {
 			Sound(msg.Sound).
 			Category("myNotificationCategory")
 		group, exist := msg.ExtParams["group"]
-		if exist {
-			pl = pl.ThreadID(group.(string))
+		if exist && group != nil {
+			// ExtParams values arrive as arbitrary JSON types; assert via
+			// Sprint instead of a type assertion to avoid a panic (and skip
+			// nil so APNs never receives a literal "<nil>").
+			pl = pl.ThreadID(fmt.Sprint(group))
 		}
 	}
 
@@ -144,7 +148,7 @@ func Push(msg *PushMessage) (code int, err error) {
 		return 500, err
 	}
 	if resp.StatusCode != 200 {
-		return resp.StatusCode, fmt.Errorf(resp.Reason)
+		return resp.StatusCode, errors.New(resp.Reason)
 	}
 	return 200, nil
 }

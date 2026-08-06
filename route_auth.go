@@ -9,6 +9,24 @@ import (
 	"github.com/mritd/logger"
 )
 
+// authFreeRouters are paths exempt from Basic Auth; they carry their own
+// authentication (gotify token on /message & /stream, none needed on the
+// probe endpoints).
+var authFreeRouters = []string{"/ping", "/register", "/healthz", "/version", "/message", "/stream"}
+
+// isAuthFreePath reports whether p is (or is under) a Basic-Auth whitelisted
+// path, with exact-or-subpath semantics so lookalikes like /messageevil are
+// NOT whitelisted.
+func isAuthFreePath(urlPrefix, p string) bool {
+	for _, item := range authFreeRouters {
+		base := path.Join(urlPrefix, item)
+		if p == base || strings.HasPrefix(p, base+"/") {
+			return true
+		}
+	}
+	return false
+}
+
 func routerAuth(user, passwd string, router fiber.Router, urlPrefix string) {
 	if user == "" && passwd == "" {
 		logger.Info("Hotify-Bark Server Has No Basic Auth.")
@@ -16,15 +34,12 @@ func routerAuth(user, passwd string, router fiber.Router, urlPrefix string) {
 	}
 
 	logger.Info("Hotify-Bark Server Has Basic Auth Enabled.")
-	authFreeRouters := []string{"/ping", "/register", "/healthz", "/version", "/message", "/stream"}
 	basicAuth := fiberbasicauth.New(fiberbasicauth.Config{
 		Users: map[string]string{user: passwd},
 		Realm: "Coffee Time",
 		Unauthorized: func(c *fiber.Ctx) error {
-			for _, item := range authFreeRouters {
-				if strings.HasPrefix(c.Path(), path.Join(urlPrefix, item)) {
-					return c.Next()
-				}
+			if isAuthFreePath(urlPrefix, c.Path()) {
+				return c.Next()
 			}
 			return c.Status(418).SendString("I'm a teapot")
 		},
