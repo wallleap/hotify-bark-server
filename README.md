@@ -9,7 +9,7 @@ Hotify-Bark Server 是 [Bark](https://github.com/Finb/Bark) 服务端（[Finb/ba
 
 TODO:
 
-- [ ] 实现删除消息接口，DELETE `/message`、`/message/:id`，要认证（优先级低）
+- [x] 实现删除消息接口，DELETE `/message`、`/message/:id`，要认证（优先级低）
 - [ ] 更详细的教程，token、key 填写到哪里（优先级中）
 
 ## 与原项目的区别

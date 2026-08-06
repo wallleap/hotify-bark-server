@@ -11,6 +11,8 @@ iOS 侧投递成败**不影响**这条监测流（hotify-bridge 拿到消息后�
 |---|---|---|---|
 | GET | `/version` | 无 | 返回 `{"version":"<build 版本>"}`，供 hotify-bridge 同机探测 |
 | GET | `/message?token=<clientToken>&limit=<N>&since=<id>` | 客户端 token | 返回历史消息 `{"messages":[...]}`，id 降序（最新在前），`limit` 默认 100 上限 200，`since` 过滤 `id < since` |
+| DELETE | `/message?token=<clientToken>` | 客户端 token | 清空全部历史消息 |
+| DELETE | `/message/<id>?token=<clientToken>` | 客户端 token | 删除指定 id 的消息；不存在返回 404 |
 | GET | `/stream?token=<clientToken>` | 客户端 token | WebSocket，实时推送**裸** gotify 消息帧（无 `event:` 外壳） |
 
 消息帧 / `messages[]` 元素格式（与 Gotify 一致）：
