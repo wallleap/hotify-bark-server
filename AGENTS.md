@@ -38,6 +38,7 @@ Bark 服务端（Finb/bark-server）的独立 fork：Go + Fiber v2 的 iOS (APNs
 ## Constraints
 - **提交前门禁**：`go build ./...` + `go vet ./...` + `go test ./internal/gotifycompat/` 必须全绿（package main 测试受 `deviceToken` 门槛限制，见 Commands）。
 - **提交信息**用 conventional commits（`feat:`/`fix:`/`docs:`/`chore:`/`build:`，可带 scope，如 `chore(deps):`）——与仓库现有历史保持一致。
+- **语义化版本**：`v*` 开头的 git tag 用于触发 CI 构建推送（见 `.github/workflows/ci.yaml`），必须遵循 [Semantic Versioning](https://semver.org/)（`vMAJOR.MINOR.PATCH`，可带 `-prerelease`/`+build`，如 `v1.2.3`、`v2.0.0-rc.1`）；不要用前缀为 `v` 但非法版本的 tag（如 `v1`、`vnext`）触发构建。
 - **错误处理**：一律 wrap 后向上传播（`fmt.Errorf("...: %w", err)`），不吞错；对外错误信息用 `failed(code, msg, ...)` 统一返回。
 - **敏感信息**：client token、密码、device_token 默认不写日志、不进提交；token 的"首次启动打印一次"是刻意设计（见 Notes），其余场景不打印。
 - **日志脱敏范围**：访问日志**不记录请求体**（无 `${body}`——推送正文与 `device_token`/`device_key` 不进日志，审计走 gotify 历史 `/message`）；query 中仅 client token 脱敏（`?token=<值>` → `?token=***`，实现于 router.go 的 `redactingWriter`/`tokenParamRe`）；其它 query 参数（如 `GET /register?devicetoken=`）保持原样。

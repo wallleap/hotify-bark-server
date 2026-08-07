@@ -56,6 +56,24 @@ docker compose up -d
 > **本地开发**：`bin/up` / `bin/down` 默认使用 `deploy/docker-compose.local.yaml`（本地构建镜像，不拉远程），
 > `bin/up` 会自动 `--build`。如需用远程镜像：`COMPOSE_FILE=deploy/docker-compose.yaml bin/up`。
 
+### CI 构建与推送（GitHub Actions）
+
+`.github/workflows/ci.yaml` 会在打上 `v*` 开头的标签时自动构建并推送镜像到 **Docker Hub** 和 **GHCR**：
+
+> **版本规范**：`v*` 开头的 tag 必须符合[语义化版本](https://semver.org/)（`vMAJOR.MINOR.PATCH`，可带 `-prerelease`/`+build`，如 `v1.2.3`、`v2.0.0-rc.1`），推送到 Docker Hub 与 GHCR 的镜像 tag 即该版本号。
+
+- Docker Hub：`<DOCKERHUB_USERNAME>/hotify-bark-server`
+- GHCR：`ghcr.io/<GitHub 账号>/hotify-bark-server`
+
+推送镜像需要配置两个 Secrets（仓库 **Settings → Secrets and variables → Actions**）：
+
+| Secret | 说明 |
+|---|---|
+| `DOCKERHUB_USERNAME` | Docker Hub 用户名，用于登录及镜像命名空间 |
+| `DOCKERHUB_TOKEN` | Docker Hub [Access Token](https://hub.docker.com/settings/security)（非登录密码） |
+
+GHCR 推送使用仓库自带 `GITHUB_TOKEN`，需在 **Settings → Actions → General → Workflow permissions** 中开启 **Read and write permissions**（`packages: write` 已在 workflow 内显式声明）。
+
 ### systemd
 
 ```sh
