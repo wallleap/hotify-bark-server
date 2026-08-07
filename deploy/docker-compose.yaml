@@ -4,6 +4,8 @@ services:
     container_name: hotify-bark-server
     restart: always
     volumes:
+      # 首次使用 host 目录挂载时，需先执行 sudo chown -R 1000:1000 ./deploy/data
+      # （容器内以非 root 用户 app（uid 1000）运行，否则报 permission denied）
       - ./data:/data
     ports:
       - "18080:8080"

@@ -41,6 +41,12 @@ docker run -dt --name hotify-bark-server --restart unless-stopped \
   wallleap/hotify-bark-server
 ```
 
+> 容器以非 root 用户 `app`（uid 1000）运行，首次挂载 host 数据目录时需把属主改为该 uid，否则报 `permission denied`：
+> ```sh
+> sudo chown -R 1000:1000 `pwd`/bark-data
+> ```
+> 用 Docker 命名卷（`docker volume create` + `-v <volume>:/data`）可免去手动 chown。
+
 > 镜像推送到 Docker Hub（用户 `wallleap`）。如需自己的仓库，用 `docker tag wallleap/hotify-bark-server yourname/hotify-bark-server`。
 
 使用 docker-compose：
