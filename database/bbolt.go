@@ -74,9 +74,10 @@ func (d *BboltDB) SaveDeviceTokenByKey(key, deviceToken string) (string, error) 
 	err := db.Update(func(tx *bbolt.Tx) error {
 		bucket := tx.Bucket([]byte(bucketName))
 
-		// If the deviceKey is empty or the corresponding deviceToken cannot be obtained from the database,
-		// it is considered as a new device registration
-		if key == "" || bucket.Get([]byte(key)) == nil {
+		// A provided key is always honored (matching MySQL): a caller restoring
+		// a known device key keeps that exact key, even if the record is not
+		// currently present. Only an empty key is treated as a new registration.
+		if key == "" {
 			// Generate a new UUID as the deviceKey when a new device register
 			key = shortuuid.New()
 		}

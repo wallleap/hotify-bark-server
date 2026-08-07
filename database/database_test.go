@@ -141,3 +141,31 @@ func TestBboltErrors(t *testing.T) {
 		t.Fatal("want error for missing key, got nil")
 	}
 }
+
+// TestBboltHonorsProvidedKey guards the "restore a known key" semantics: passing
+// a non-empty key must always be preserved (matching MySQL), never silently
+// replaced by a newly generated key, even when the key is not already present.
+func TestBboltHonorsProvidedKey(t *testing.T) {
+	dir := t.TempDir()
+	db := NewBboltdb(filepath.Join(dir, "data"))
+
+	const provided = "restore-me-key"
+
+	// Register with a specific non-empty key that is not yet in the DB: the key
+	// must be preserved, not regenerated.
+	key, err := db.SaveDeviceTokenByKey(provided, "token-v1")
+	if err != nil {
+		t.Fatalf("SaveDeviceTokenByKey failed: %v", err)
+	}
+	if key != provided {
+		t.Fatalf("want key preserved %q, got %q", provided, key)
+	}
+
+	tok, err := db.DeviceTokenByKey(provided)
+	if err != nil {
+		t.Fatalf("DeviceTokenByKey failed: %v", err)
+	}
+	if tok != "token-v1" {
+		t.Fatalf("want token %q, got %q", "token-v1", tok)
+	}
+}
