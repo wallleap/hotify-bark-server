@@ -1,5 +1,39 @@
 <a name="unreleased"></a>
 
+## [v0.3.0](https://github.com/wallleap/hotify-bark-server/compare/v0.2.2...v0.3.0)
+
+> 2026-08-08
+
+### Bug Fixes
+
+- **database:** honor a provided device key in bbolt, matching MySQL
+- **ratelimit:** pass through /register when rate limiting is disabled
+
+### Build
+
+- **docker:** drop gcc from builder image
+
+### Documentation
+
+- update Gotify/MCP interface descriptions and bridge device_key config
+- note that bridge monitors all messages (personal-deploy only)
+- correct bin/release usage description in AGENTS.md
+
+### Features
+
+- **gotify:** add device-scoped /:device_key/{version,message,stream} interfaces
+
+### Maintenance
+
+- record no-auto-commit rule in AGENTS.md
+- show live bouncing progress while building in bin/build
+- print build progress in bin/build
+
+### Tests
+
+- **gotify:** cover device-scoped limit, ordering and SourceDevice precedence
+
+
 ## [v0.2.2](https://github.com/wallleap/hotify-bark-server/compare/v0.2.1...v0.2.2)
 
 > 2026-08-07
@@ -7,6 +41,10 @@
 ### Bug Fixes
 
 - write CHANGELOG via stdout and brace-quote NEW_TAG in release
+
+### Documentation
+
+- update CHANGELOG for v0.2.2
 
 
 ## [v0.2.1](https://github.com/wallleap/hotify-bark-server/compare/v0.2.0...v0.2.1)
