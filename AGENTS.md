@@ -41,6 +41,7 @@ Bark 服务端（Finb/bark-server）的独立 fork：Go + Fiber v2 的 iOS (APNs
 - 运行：`go test ./internal/gotifycompat/`（可直接跑）；package main 测试需先填 `push_test.go` 的 `deviceToken` 常量。
 
 ## Constraints
+- **不自动提交**：除非用户明确说"提交/commit"，一律只改文件不执行 `git commit`（包括 `--amend`）；改动完成后口头汇报，等用户指示再提交。
 - **提交前门禁**：`go build ./...` + `go vet ./...` + `go test ./internal/gotifycompat/` 必须全绿（package main 测试受 `deviceToken` 门槛限制，见 Commands）。
 - **提交信息**用 conventional commits（`feat:`/`fix:`/`docs:`/`chore:`/`build:`，可带 scope，如 `chore(deps):`）——与仓库现有历史保持一致。
 - **语义化版本**：`v*` 开头的 git tag 用于触发 CI 构建推送（见 `.github/workflows/ci.yaml`），必须遵循 [Semantic Versioning](https://semver.org/)（`vMAJOR.MINOR.PATCH`，可带 `-prerelease`/`+build`，如 `v1.2.3`、`v2.0.0-rc.1`）；不要用前缀为 `v` 但非法版本的 tag（如 `v1`、`vnext`）触发构建。
