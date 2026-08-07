@@ -12,6 +12,7 @@ Bark 服务端（Finb/bark-server）的独立 fork：Go + Fiber v2 的 iOS (APNs
 - 运行：`go run . --data ./dev-data`（默认监听 `0.0.0.0:8080`，数据目录默认 `/data` 需可写）；docker compose：`bin/up` / `bin/down`（本地镜像）。
 - 测试：`go test ./internal/gotifycompat/` ✅ 可直接跑；**`go test ./...` 会失败**——`push_test.go` 的 `TestMain` 要求手填有效 `deviceToken` 常量（当前为空会 panic）。
 - 静态检查：`go vet ./...` 当前干净（此前 `apns/apns.go:147` 非恒定格式串已修复）。
+- 发布新版本：`bin/release` 无参自动递增 **MINOR**（基于最近创建的 tag，PATCH 归零，可跨 MAJOR，如 v0.2.0→v0.3.0）；`bin/release vX.Y.Z` 指定完整版本号（须符合语义化版本）；`--no-push` 只打 tag 不推送，`--dry-run` 预览。
 
 ## Architecture
 - `apns/` — APNs 推送客户端：`apns.go`（PushMessage、Push、客户端池）、`apns_certs.go`（证书/JWT 鉴权）。全局客户端数由 `--max-apns-client-count` 控制。**`apns_certs.go` 内置 Bark 的 APNs p8 私钥**（`keyID`/`teamID` 常量 + 私钥）——"服务端代发"架构、上游设计，不是密钥泄漏，勿移除。
