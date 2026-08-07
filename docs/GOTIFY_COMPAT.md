@@ -1,9 +1,11 @@
 # Gotify-Compatible Monitoring Interface
 
-bark-server 对外提供一组与 [Gotify](https://gotify.net) **只读/订阅**协议兼容的接口，让
-[hotify-bridge](https://github.com/sakura-lolipop/hotify-bridge) 可以像监测 Gotify 一样监测
-bark——bark 每收到一次推送，就把它持久化为一条 gotify 风格的消息，并实时推送给订阅者。
-iOS 侧投递成败**不影响**这条监测流（hotify-bridge 拿到消息后照常转推华为 Push Kit）。
+bark-server 对外提供一组与 [Gotify](https://gotify.net) 协议兼容的接口，让 [hotify-bridge](https://github.com/sakura-lolipop/hotify-bridge) 可以
+
+- 像监测 Gotify 一样监测 bark——bark 每收到一次推送，就把它持久化为一条 gotify 风格的消息，并实时推送给订阅者
+- 同时可以获取、删除消息
+
+> iOS 侧投递成败**不影响**这条监测流（hotify-bridge 拿到消息后照常转推华为 Push Kit）
 
 ## 接口
 
@@ -18,6 +20,7 @@ iOS 侧投递成败**不影响**这条监测流（hotify-bridge 拿到消息后�
 ### 设备级接口
 
 每个 `device_key` 可单独访问自己的历史与实时流，用于**只接收某个设备**的推送监测。
+
 **认证仍用全局 client token**（设备隔离不是凭证），token 读取优先级同全局。设备级接口只透传该 `device_key` 自己产生的消息，其它设备的消息不回。
 
 | Method | Path | 认证 | 说明 |
@@ -28,8 +31,7 @@ iOS 侧投递成败**不影响**这条监测流（hotify-bridge 拿到消息后�
 | DELETE | `/<device_key>/message/<id>?token=<clientToken>` | `token` | 删除该设备下指定 id；不属于该设备或不存在返回 404 |
 | GET | `/<device_key>/stream?token=<clientToken>` | `token` | WebSocket，实时推送该设备的裸消息帧 |
 
-设备级路径为**静态段**（`/version`、`/message`、`/stream`），优先于旧版 `GET /:device_key
-/:body` 兼容推送，不会与 `/<device_key>` 单段推送冲突。
+设备级路径为**静态段**（`/version`、`/message`、`/stream`），优先于旧版 `GET /:device_key/:body` 兼容推送，不会与 `/<device_key>` 单段推送冲突。
 
 消息帧 / `messages[]` 元素格式（与 Gotify 一致）：
 

@@ -40,6 +40,7 @@ Bark App ──注册(device_token)──▶ 服务端 ──返回 device_key�
 |---|---|
 | 推送（推荐） | `POST /push` 请求体 JSON 的 `device_key` 字段 |
 | 推送（旧版兼容） | URL 路径：`GET /<device_key>/<title>/<body>` |
+| hotify-bridge，Hotify APP | Gotify URL/地址配置：`http://<bark-host>:18080/<device_key>` |
 | 批量推送 | `POST /push` 的 `device_keys` 数组（每个元素一个 key） |
 | MCP 推送 | `/mcp/<device_key>` 路径，或工具参数 `device_key` |
 | iOS 侧 | Bark App 里配置的服务器地址指向你的服务端后，key 由 App 管理 |
@@ -54,7 +55,7 @@ device_token 由 **iOS 系统**生成、Bark App 注册 APNs 时获得，服务�
 
 ## 4. client token 填到哪里
 
-client token 是 gotify 兼容监控接口（`/message`、`/stream`）的访问凭证，**强烈推荐预置**。
+client token 是 gotify 兼容监控、操作接口（`/message`、`/stream`）的访问凭证，**强烈推荐预置**。
 
 **服务端侧（预置）**——二选一，效果相同：
 
@@ -71,7 +72,7 @@ export BARK_SERVER_GOTIFY_CLIENT_TOKEN='你的token'
 
 ```yaml
 # bridge_config.yaml
-gotify_url: http://<bark-host>:18080
+gotify_url: http://<bark-host>:18080 # 或 http://<bark-host>:18080/<device_key>
 gotify_token: <上面预置的 client token>
 ```
 

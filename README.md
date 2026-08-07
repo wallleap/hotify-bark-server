@@ -2,19 +2,22 @@
 
 Hotify-Bark Server 是 [Bark](https://github.com/Finb/Bark) 服务端（[Finb/bark-server](https://github.com/Finb/bark-server)）的一个**修改版分支**，扩展了部分功能供 [hotify-bridge](https://github.com/sakura-lolipop/hotify-bridge) 调用，可以在推送消息到 iOS 的同时，依赖 hotify-bridge 推送消息到 HarmonyOS。
 
-> **注意**：本项目基于上游修改，**不会同步回原项目**，也不会再使用上游的构建产物 / 镜像。所有二进制、镜像、module 路径均已独立命名，与上游可明确区分。改动清单见 [DIFFERENCES.md](DIFFERENCES.md)。
+> **注意**：本项目基于上游修改，**不会同步回原项目**，也不会再使用上游的构建产物 / 镜像。所有二进制、镜像、module 路径均已独立命名，与上游可明确区分。
 
 - iOS 需下载 Bark
 - HarmonyOS 需下载 Hotify
 
 目前 hotify-bridge 可以监控到所有消息，因此只适合个人部署使用，不推荐作为公共服务开放给其他用户。
+如果想让 hotify-bridge 只监控某个 device_key 的消息，可在 hotify-bridge 的 `gotify_url` 里追加该 `device_key` 路径（见下文依赖 hotify-bridge 小节）。
 
 ## 与原项目的区别
 
 - 独立的 Go module、二进制名与 Docker 镜像名（`wallleap/hotify-bark-server`）
-- 内置 [Gotify 兼容监控接口](./docs/GOTIFY_COMPAT.md)（`/version`、`/message`、`/stream`），供 hotify-bridge 监测 bark 推送
+- 内置 [Gotify 兼容接口](./docs/GOTIFY_COMPAT.md)（`/version`、`/message`、`/stream` 等），供 hotify-bridge 监测 bark 推送或操作消息
 - 内置 [MCP](./docs/MCP.md) 接口（`/mcp`、`/mcp/:device_key`），AI 代理可直接调用推送
 - 可选 Basic Auth、MySQL TLS、gotify 客户端 token 等
+
+> 改动清单见 [DIFFERENCES.md](DIFFERENCES.md)。
 
 ## 安装
 
@@ -56,14 +59,17 @@ docker run -dt --name hotify-bark-server --restart unless-stopped \
 ```sh
 # 复制本项目 deploy/docker-compose.yaml 到任意目录
 mkdir hotify-bark-server && cd hotify-bark-server
-cp /path/to/hotify-bark-server/deploy/docker-compose.yaml .
+curl -sL https://raw.githubusercontent.com/wallleap/hotify-bark-server/master/deploy/docker-compose.yaml -o docker-compose.yaml
+# 提前赋权避免容器权限报错
+sudo chown -R 1000:1000 ./data
+# 后台启动
 docker compose up -d
 ```
 
 `deploy/docker-compose.yaml` 已内置注释的环境变量入口，按需取消注释即可。
 
-> **本地开发**：`bin/up` / `bin/down` 默认使用 `deploy/docker-compose.local.yaml`（本地构建镜像，不拉远程），
-> `bin/up` 会自动 `--build`。如需用远程镜像：`COMPOSE_FILE=deploy/docker-compose.yaml bin/up`。
+> **本地开发**：`bin/up` / `bin/down` 默认使用 `deploy/docker-compose.local.yaml`（本地构建镜像，不拉远程），`bin/up` 会自动 `--build`。
+> 如需用远程镜像可运行 `COMPOSE_FILE=deploy/docker-compose.yaml bin/up`。
 
 ### CI 构建与推送（GitHub Actions）
 
@@ -162,12 +168,12 @@ systemctl enable --now hotify-bark-server
 
 ### 依赖 hotify-bridge（Gotify 兼容监控）
 
-本 fork 的 Gotify 兼容接口供 [hotify-bridge](https://github.com/wallleap/hotify-bark-server) 监测推送。部署时：
+本 fork 的 Gotify 兼容接口供 [hotify-bridge](https://github.com/sakura-lolipop/hotify-bridge) 监测推送。部署时：
 
 1. 设置 `BARK_SERVER_GOTIFY_CLIENT_TOKEN`（**强烈推荐预置**：预置时服务端只存 SHA-256 哈希、不落明文凭证；不设置时自动生成的 token 明文会写进 `<data>/gotify.db`，且仅首次启动在日志打印一次）。
 2. 在 hotify-bridge 的 `bridge_config.yaml` 填入：
    ```yaml
-   gotify_url: http://<bark-host>:18080
+   gotify_url: http://<bark-host>:18080 # 监控所有，如果只想监控某个 device_key 可以写 http://<bark-host>:18080/<device_key>
    gotify_token: <上面的 client token>
    ```
    或使用环境变量 `GOTIFY_HTTP_URL` / `GOTIFY_CLIENT_TOKEN`。
@@ -195,7 +201,7 @@ task linux_amd64_v3
 
 也可以使用脚本 `bin/build` 直接编译本机二进制。
 
-发布 Docker 镜像：
+发布 Docker 镜像（实际使用的 GitHub workflow 自动构建发布）：
 
 ```sh
 bin/publish              # 构建并推送单架构镜像（宿主机架构）
@@ -232,7 +238,7 @@ PLATFORM=linux/amd64,linux/arm64 bin/publish   # 指定架构
 * [MCP.md](./docs/MCP.md) — MCP 推送接口
 * [TOKENS.md](./docs/TOKENS.md) — device_token、device_key、client token 是什么及如何生成
 * [OPTIMIZATION_REVIEW.md](./docs/OPTIMIZATION_REVIEW.md) — 优化建议可行性核对（对现有代码逐条标注已实现/未实现）
-* [DIFFERENCES.md](./docs/DIFFERENCES.md) — 相对上游的改动清单
+* [DIFFERENCES.md](./DIFFERENCES.md) — 相对上游的改动清单
 
 ## License
 

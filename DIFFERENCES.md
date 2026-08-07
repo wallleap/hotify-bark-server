@@ -8,7 +8,7 @@
 
 | 功能 | 说明 | 文档 |
 |---|---|---|
-| Gotify 兼容监控 | `GET /version`、`GET /message`、`GET /stream`(WebSocket)，让 hotify-bridge 能像监测 Gotify 一样监测 bark | [GOTIFY_COMPAT.md](docs/GOTIFY_COMPAT.md) |
+| Gotify 兼容监控及其它消息相关接口 | `GET /version`、`GET /message`、`GET /stream`(WebSocket)，让 hotify-bridge 能像监测 Gotify 一样监测 bark | [GOTIFY_COMPAT.md](docs/GOTIFY_COMPAT.md) |
 | MCP 推送 | `POST /mcp`、`POST /mcp/:device_key`，AI 代理可通过 Model Context Protocol 直接发推送 | [MCP.md](docs/MCP.md) |
 | Basic Auth | 可选 `--user/--password`，`/ping` `/register` `/healthz` `/version` `/message` `/stream` 白名单 | |
 | MySQL TLS | `--mysql-tls` 及配套 `mysql-ca`/`mysql-client-cert`/`mysql-client-key`/`mysql-tls-name`/`mysql-tls-skip-verify` | |
