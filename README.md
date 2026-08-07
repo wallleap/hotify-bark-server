@@ -197,6 +197,7 @@ PLATFORM=linux/amd64,linux/arm64 bin/publish   # 指定架构
 * [GOTIFY_COMPAT.md](./docs/GOTIFY_COMPAT.md) — Gotify 兼容监控接口
 * [MCP.md](./docs/MCP.md) — MCP 推送接口
 * [TOKENS.md](./docs/TOKENS.md) — device_token、device_key、client token 是什么及如何生成
+* [OPTIMIZATION_REVIEW.md](./docs/OPTIMIZATION_REVIEW.md) — 优化建议可行性核对（对现有代码逐条标注已实现/未实现）
 * [DIFFERENCES.md](./docs/DIFFERENCES.md) — 相对上游的改动清单
 
 ## License
