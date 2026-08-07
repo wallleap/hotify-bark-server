@@ -17,9 +17,11 @@ Bark 服务端（Finb/bark-server）的独立 fork：Go + Fiber v2 的 iOS (APNs
 - `apns/` — APNs 推送客户端：`apns.go`（PushMessage、Push、客户端池）、`apns_certs.go`（证书/JWT 鉴权）。全局客户端数由 `--max-apns-client-count` 控制。**`apns_certs.go` 内置 Bark 的 APNs p8 私钥**（`keyID`/`teamID` 常量 + 私钥）——"服务端代发"架构、上游设计，不是密钥泄漏，勿移除。
 - `database/` — `Database` 接口（`database.go`）+ 实现：`bbolt.go`（默认）、`mysql.go`（`--dsn`）、`membase.go` / `envbase.go`（测试 / serverless）。
 - `internal/gotifycompat/` — Gotify 兼容监控：`service.go`（Init/ValidateToken/Publish）、`store.go`（bbolt 持久化，不可用则内存降级）、`hub.go`（WebSocket 扇出）、`token.go`（token 生成/hash）。数据在 `<data>/gotify.db`。
-- 根目录路由文件（`package main`，各自 `init()` 中 `registerRoute` 注册）：`route_push.go`（V1/V2、批量推送）、`route_register.go`、`route_gotify.go`（`/version`、`/message`、`/stream`）、`route_mcp.go`（`/mcp`、`/mcp/:device_key`）、`route_misc.go`、`route_auth.go`（可选 Basic Auth）。
+- 根目录路由文件（`package main`，各自 `init()` 中 `registerRoute` 注册）：`route_push.go`（V1/V2、批量推送）、`route_register.go`、`route_gotify.go`（`/version`、`/message`、`/stream`）、`route_mcp.go`（`/mcp`、`/mcp/:device_key`）、`route_misc.go`、`route_auth.go`（可选 Basic Auth）、`route_rate_limit.go`（限流中间件与初始化）。
+- 限流：`internal/ratelimit/`（token bucket，按 key 即 IP，并发安全）；`route_rate_limit.go` 的 `setupRateLimits(ip, burst, push)` 在 `runServer` 里从 flags 构建 `ipLimiter`。`/register`、`/mcp*` **始终限流**；推送端点 `/push`、`/:device_key` 默认不限流，仅当 `--rate-limit-push` 开启。**中间件必须按单路由挂（`route_rate_limit.go` 的 `rateLimitMiddleware` / `rateLimitPushMiddleware`），不能 group 级 `Use`**——所有路由共享一个 Fiber group，group Use 会把限流器泄漏到无关路径。
 - 认证模型：`/push`、`/:device_key` 兼容推送、`/mcp*` **无独立认证**（device_key 即凭证）；`/message`、`/stream` 用 gotify client token（恒定时间比较，`/version` 无需认证）；Basic Auth 开启时白名单 `authFreeRouters`（`route_auth.go` 包级变量：`/ping /register /healthz /version /message /stream`）经 `isAuthFreePath` 按**精确路径/子路径**匹配放行——勿改回裸前缀匹配，否则 `/messageevil` 类路径会被放行（曾为此出过 auth bypass）。
 - `router.go` — 路由注册表（`registerRoute` / `registerRouteWithWeight`，按 weight 降序）+ 通用响应 `CommonResp`（`success()` / `failed()` / `data()`）+ fiber logger/recover 中间件。
+- `deploy/helm-chart/` — Kubernetes 部署：PVC 持久化 `/data`（bbolt + gotify.db，`persistence` 值控制）；MySQL DSN 经 Secret 注入 `BARK_SERVER_DSN`（`mysql-secret.yaml`），不以明文 args 传递。
 
 ## Conventions
 - 新增路由：在根目录新建 `route_*.go`，`init()` 里调 `registerRoute(name, func(router fiber.Router){...})`；带权重的用 `registerRouteWithWeight`（0–100，名字不区分大小写且不可重复）。
@@ -27,6 +29,7 @@ Bark 服务端（Finb/bark-server）的独立 fork：Go + Fiber v2 的 iOS (APNs
 - 日志用 `github.com/mritd/logger`（`logger.Infof/Errorf/...`），不要用标准库 log。
 - JSON 序列化统一 jsoniter（fiber `JSONEncoder` 已配置）。
 - CLI 参数风格：urfave/cli 的 `StringFlag/BoolFlag/IntFlag`，`EnvVars: []string{"BARK_SERVER_*"}`，大小写转换参数名。
+- Docker 运行用户是 `app`（uid 1000，非 root），`/etc` 运行时不可写；**entrypoint 不要做改 `/etc/localtime` 之类的运行时写操作**（曾在 `set -e` 下 `ln -sf` 因 target 已存在而 `File exists` 导致容器启动失败退出 1），时区在 Dockerfile 构建期烘焙、`BARK_SERVER_DATA_DIR=/data` 且 `/data` 已 chown 给 `app`。
 - gotifycompat 的降级原则：存储不可用 → 内存降级，日志记录，**绝不致命**（参考 `service.go` Init）。
 
 ## Testing
@@ -49,3 +52,4 @@ Bark 服务端（Finb/bark-server）的独立 fork：Go + Fiber v2 的 iOS (APNs
 ## Notes
 - gotify client token 打印策略：未预置时首次启动打印一次；重启后不打印（防日志泄漏），日志提示持久化位置；数据目录不可用降级内存存储时每次启动重新生成并打印。
 - `docs/TOKENS.md` 说明 device_token / device_key / client token 三者区别与生成方式。
+- 安全部署：默认无鉴权（`/push`、`/register`、`/mcp*`、`/:device_key` 对网络开放）；公网部署建议开启 Basic Auth（`BARK_SERVER_BASIC_AUTH_USER/PASSWORD`）与限流（`BARK_SERVER_RATE_LIMIT_IP` 等），详见 README「安全建议」小节。未配置 Basic Auth 时 `route_auth.go` 的 `routerAuth` 打印醒目的多行 WARN 横幅，这是刻意的提示，勿降级为普通日志。
