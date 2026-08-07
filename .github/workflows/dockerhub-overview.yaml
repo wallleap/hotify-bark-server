@@ -1,0 +1,21 @@
+name: Update Docker Hub Overview
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  docker-hub:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Update Docker Hub description
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ secrets.DOCKERHUB_USERNAME }}/hotify-bark-server
+          readme-filepath: ./deploy/docker-hub-overview.md
+          short-description: Hotify-Bark Server - a modified Bark server with gotify compat & MCP

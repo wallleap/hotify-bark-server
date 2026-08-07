@@ -32,7 +32,8 @@ Hotify-Bark Server 是 [Bark](https://github.com/Finb/Bark) 服务端（[Finb/ba
 ### Docker
 
 ```sh
-docker run -dt --name hotify-bark-server -p 18080:8080 \
+docker run -dt --name hotify-bark-server --restart unless-stopped \
+  -p 18080:8080 \
   -v `pwd`/bark-data:/data \
   -e BARK_SERVER_GOTIFY_CLIENT_TOKEN="your-gotify-client-token" \
   -e BARK_SERVER_BASIC_AUTH_USER="admin" \
@@ -73,6 +74,8 @@ docker compose up -d
 | `DOCKERHUB_TOKEN` | Docker Hub [Access Token](https://hub.docker.com/settings/security)（非登录密码） |
 
 GHCR 推送使用仓库自带 `GITHUB_TOKEN`，需在 **Settings → Actions → General → Workflow permissions** 中开启 **Read and write permissions**（`packages: write` 已在 workflow 内显式声明）。
+
+> **Docker Hub Overview**：`deploy/docker-hub-overview.md` 由 `.github/workflows/dockerhub-overview.yaml` 在 push 到 master 时自动同步为 Docker Hub 仓库简介（需已配置上面两个 Secret）。
 
 ### systemd
 
