@@ -73,8 +73,9 @@ if [ "$DRY_RUN" = "1" ]; then
   exit 0
 fi
 
-# 1) 更新 CHANGELOG（git-chglog 以 --next-tag 生成未发布版本段）
-"$GITCHGLOG" --next-tag "$NEW_TAG" "v0.1.0.." -o CHANGELOG.md
+# 1) 更新 CHANGELOG（git-chglog 以 --next-tag 生成未发布版本段；
+#    注意 --next-tag 模式下 -o 不写文件，须用 stdout 重定向）
+"$GITCHGLOG" --next-tag "$NEW_TAG" "v0.1.0.." > CHANGELOG.md
 git add CHANGELOG.md
 if git diff --cached --quiet; then
   echo "==> CHANGELOG 无变化，跳过提交"
@@ -91,7 +92,7 @@ echo "==> 已创建 tag: $NEW_TAG"
 if [ "$PUSH" = "1" ]; then
   git push origin "$BRANCH"
   git push origin "$NEW_TAG"
-  echo "==> 已推送 $BRANCH 与 $NEW_TAG，CI 将构建镜像: https://github.com/wallleap/hotify-bark-server/actions"
+  echo "==> 已推送 $BRANCH 与 ${NEW_TAG}，CI 将构建镜像: https://github.com/wallleap/hotify-bark-server/actions"
 else
-  echo "==> 未推送（--no-push），手动推送: git push origin $NEW_TAG"
+  echo "==> 未推送（--no-push），手动推送: git push origin ${NEW_TAG}"
 fi
