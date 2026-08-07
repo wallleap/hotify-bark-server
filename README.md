@@ -75,8 +75,6 @@ docker compose up -d
 
 GHCR 推送使用仓库自带 `GITHUB_TOKEN`，需在 **Settings → Actions → General → Workflow permissions** 中开启 **Read and write permissions**（`packages: write` 已在 workflow 内显式声明）。
 
-> **Docker Hub Overview**：`deploy/docker-hub-overview.md` 由 `.github/workflows/dockerhub-overview.yaml` 在 push 到 master 时自动同步为 Docker Hub 仓库简介（需已配置上面两个 Secret）。
-
 ### systemd
 
 ```sh
