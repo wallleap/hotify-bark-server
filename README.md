@@ -119,6 +119,7 @@ systemctl enable --now hotify-bark-server
 | `--addr` / `BARK_SERVER_ADDRESS` | 监听地址，默认 `0.0.0.0:8080` |
 | `--data` / `BARK_SERVER_DATA_DIR` | 数据目录（bbolt + gotify.db），默认 `/data` |
 | `--gotify-client-token` / `BARK_SERVER_GOTIFY_CLIENT_TOKEN` | Gotify 兼容监控客户端 token，自动生成并持久化。**hotify-bridge 需用它当作 `gotify_token`**（依赖见下文） |
+| `--gotify-max-messages` / `BARK_SERVER_GOTIFY_MAX_MESSAGES` | Gotify 监控消息保留上限，默认 `0`（使用内置默认 `1000`） |
 | `--user` / `--password` / `BARK_SERVER_BASIC_AUTH_{USER,PASSWORD}` | 可选 Basic Auth |
 | `--dsn` / `BARK_SERVER_DSN` | 改用 MySQL 替代 Bbolt |
 | `--mysql-tls` `--mysql-ca` `--mysql-client-cert` `--mysql-client-key` `--mysql-tls-name` `--mysql-tls-skip-verify` | MySQL TLS 相关 |

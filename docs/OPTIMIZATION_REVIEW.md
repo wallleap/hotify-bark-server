@@ -127,7 +127,7 @@
 ✅ 已落地：`deployment.yaml:55` 的 `-dsn=...` 明文参数已移除，改为 `mysql-secret.yaml`（stringData）+ env `BARK_SERVER_DSN` 引用 Secret。
 
 ### 5.3 Gotify 消息上限不可配置
-`internal/gotifycompat/service.go:26` 有 `MaxMessages` 配置，但 `main.go:64` `initGotifyCompat` 构造 `Config` 时**未传入**，恒为默认 `1000`（`service.go:19`）。无法通过 CLI/env 调整监控消息保留条数。
+✅ 已落地：新增 `--gotify-max-messages` / `BARK_SERVER_GOTIFY_MAX_MESSAGES`，`initGotifyCompat`（`main.go:66`）现已把该值传入 `gotifycompat.Config.MaxMessages`，默认 `0` 用内置 `1000`。
 
 ### 5.4 `/info` 暴露设备总数
 `route_misc.go:12` 的 `/info` 输出 `devices`（`db.CountAll`），无需鉴权即可得知在线设备规模，轻微信息泄露；建议在启用鉴权或管理接口下提供。
@@ -153,7 +153,7 @@
 | P0 | Helm PVC 持久化 + MySQL 凭据走 secret（5.1/5.2） | K8s 数据不丢、避免明文密钥 | ✅ 已落地 |
 | P1 | 单 Device 推送频率限制 + 拉黑/禁用接口 | 泄露止损 |
 | P1 | 结构化 JSON 日志 / Prometheus 指标 | 可观测性 |
-| P1 | Gotify 消息上限可配置；统一环境变量命名（5.3/5.5） | 运维一致性 | 🟡 5.5 已解决（README 补齐实际 EnvVar）；5.3 未做 |
+| P1 | Gotify 消息上限可配置；统一环境变量命名（5.3/5.5） | 运维一致性 | ✅ 5.3（`--gotify-max-messages`）与 5.5（README 补齐实际 EnvVar）均已解决 |
 | P2 | 消息按时间清理、订阅者上限 | 资源控制 |
 | P2 | APNs 连接池健康检测、批量异步削峰 | 性能 |
 | P3 | HMS 直连、YAML 配置、Bbolt↔MySQL 迁移 | 涉及架构/范围大 |
