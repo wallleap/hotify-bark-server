@@ -25,8 +25,14 @@ for arg in "$@"; do
   esac
 done
 
-if ! command -v git-chglog >/dev/null 2>&1; then
-  echo "==> git-chglog 未安装，请先执行:" >&2
+# git-chglog 可能装在 GOPATH/bin 但不在 PATH（go install 的默认位置）。
+GITCHGLOG="$(command -v git-chglog 2>/dev/null || true)"
+if [ -z "$GITCHGLOG" ]; then
+  GOBIN_DIR="$(go env GOPATH 2>/dev/null || true)/bin"
+  GITCHGLOG="$GOBIN_DIR/git-chglog"
+fi
+if [ ! -x "$GITCHGLOG" ]; then
+  echo "==> git-chglog 未找到（GOPATH/bin 或 PATH 均无），请先执行:" >&2
   echo "    GOPROXY=https://goproxy.cn,direct go install github.com/git-chglog/git-chglog/cmd/git-chglog@latest" >&2
   exit 1
 fi
@@ -68,7 +74,7 @@ if [ "$DRY_RUN" = "1" ]; then
 fi
 
 # 1) 更新 CHANGELOG（git-chglog 以 --next-tag 生成未发布版本段）
-git-chglog --next-tag "$NEW_TAG" "v0.1.0.." -o CHANGELOG.md
+"$GITCHGLOG" --next-tag "$NEW_TAG" "v0.1.0.." -o CHANGELOG.md
 git add CHANGELOG.md
 if git diff --cached --quiet; then
   echo "==> CHANGELOG 无变化，跳过提交"
