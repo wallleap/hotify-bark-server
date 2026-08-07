@@ -7,6 +7,8 @@ Hotify-Bark Server 是 [Bark](https://github.com/Finb/Bark) 服务端（[Finb/ba
 - iOS 需下载 Bark
 - HarmonyOS 需下载 Hotify
 
+目前 hotify-bridge 可以监控到所有消息，因此只适合个人部署使用，不推荐作为公共服务开放给其他用户。
+
 ## 与原项目的区别
 
 - 独立的 Go module、二进制名与 Docker 镜像名（`wallleap/hotify-bark-server`）
