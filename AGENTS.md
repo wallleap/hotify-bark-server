@@ -40,7 +40,7 @@ Bark 服务端（Finb/bark-server）的独立 fork：Go + Fiber v2 的 iOS (APNs
 - **提交信息**用 conventional commits（`feat:`/`fix:`/`docs:`/`chore:`/`build:`，可带 scope，如 `chore(deps):`）——与仓库现有历史保持一致。
 - **错误处理**：一律 wrap 后向上传播（`fmt.Errorf("...: %w", err)`），不吞错；对外错误信息用 `failed(code, msg, ...)` 统一返回。
 - **敏感信息**：client token、密码、device_token 默认不写日志、不进提交；token 的"首次启动打印一次"是刻意设计（见 Notes），其余场景不打印。
-- **日志脱敏范围**：访问日志**只**对 gotify client token 脱敏（`?token=<值>` → `?token=***`，实现于 router.go 的 `redactingWriter`/`tokenParamRe`）；`device_token`、`device_key` 等其它字段**不做**脱敏要求，保持原样记录。
+- **日志脱敏范围**：访问日志**不记录请求体**（无 `${body}`——推送正文与 `device_token`/`device_key` 不进日志，审计走 gotify 历史 `/message`）；query 中仅 client token 脱敏（`?token=<值>` → `?token=***`，实现于 router.go 的 `redactingWriter`/`tokenParamRe`）；其它 query 参数（如 `GET /register?devicetoken=`）保持原样。
 - **文档同步**：新接口/新功能同步更新 `docs/`（README 文档列表里的对应文档）与 `docs/DIFFERENCES.md`（相对上游的改动清单）。
 - **改动聚焦**：一次改动解决一个问题，不顺手重构无关代码；新逻辑优先放 `internal/` 包（可测性，见 Testing）。
 - **分步提交**：一次提交只含一个逻辑单元（按步骤/功能拆分 commit），不把无关改动塞进同一 commit；每步提交后仓库保持可构建（`go build ./...` 通过）。
