@@ -67,6 +67,7 @@ func initGotifyCompat(c *cli.Context) {
 		DataDir:     c.String("data"),
 		ClientToken: c.String("gotify-client-token"),
 		Version:     version,
+		MaxMessages: c.Int("gotify-max-messages"),
 	})
 	if err != nil {
 		logger.Errorf("gotify compat init failed: %v", err)
@@ -317,6 +318,12 @@ func getAppFlags() []cli.Flag {
 			Usage:   "Gotify-compatible client token for hotify-bridge monitoring; auto-generated and persisted if empty",
 			EnvVars: []string{"BARK_SERVER_GOTIFY_CLIENT_TOKEN"},
 			Value:   "",
+		},
+		&cli.IntFlag{
+			Name:    "gotify-max-messages",
+			Usage:   "Maximum number of gotify messages retained in <data>/gotify.db, 0 uses default (1000)",
+			EnvVars: []string{"BARK_SERVER_GOTIFY_MAX_MESSAGES"},
+			Value:   0,
 		},
 		&cli.IntFlag{
 			Name:    "max-batch-push-count",
