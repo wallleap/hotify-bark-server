@@ -14,6 +14,11 @@ import (
 // probe endpoints).
 var authFreeRouters = []string{"/ping", "/register", "/healthz", "/version", "/message", "/stream"}
 
+// basicAuthEnabled reports whether Basic Auth was configured at startup. It
+// gates features that should not be exposed to an unauthenticated network
+// (e.g. the device count on GET /info).
+var basicAuthEnabled bool
+
 // isAuthFreePath reports whether p is (or is under) a Basic-Auth whitelisted
 // path, with exact-or-subpath semantics so lookalikes like /messageevil are
 // NOT whitelisted.
@@ -28,6 +33,7 @@ func isAuthFreePath(urlPrefix, p string) bool {
 }
 
 func routerAuth(user, passwd string, router fiber.Router, urlPrefix string) {
+	basicAuthEnabled = user != "" && passwd != ""
 	if user == "" && passwd == "" {
 		logger.Warn("************************************************************")
 		logger.Warn("Hotify-Bark Server Has NO Basic Auth.")

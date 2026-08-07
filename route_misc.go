@@ -31,14 +31,19 @@ func init() {
 
 		// info func returns information about the server version
 		router.Get("/info", func(c *fiber.Ctx) error {
-			devices, _ := db.CountAll()
-			return c.JSON(map[string]interface{}{
+			resp := map[string]interface{}{
 				"version": version,
 				"build":   buildDate,
 				"arch":    runtime.GOOS + "/" + runtime.GOARCH,
 				"commit":  commitID,
-				"devices": devices,
-			})
+			}
+			// Device count is sensitive (leaks deployment scale); only report it
+			// when Basic Auth is enabled, which also protects /info behind it.
+			if basicAuthEnabled {
+				devices, _ := db.CountAll()
+				resp["devices"] = devices
+			}
+			return c.JSON(resp)
 		})
 	})
 }
