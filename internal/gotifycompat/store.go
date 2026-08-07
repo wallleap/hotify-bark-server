@@ -20,11 +20,19 @@ type Store interface {
 	// Recent returns up to limit messages with ID < since, ordered by ID
 	// descending (newest first). since==0 disables the filter.
 	Recent(limit int, since uint64) ([]Message, error)
+	// RecentByDevice is Recent filtered to a single device; device=="" returns
+	// everything (same as Recent).
+	RecentByDevice(device string, limit int, since uint64) ([]Message, error)
 	// Delete removes the message with the given ID; the bool reports whether
 	// it existed. The ID sequence is never reused.
 	Delete(id uint64) (bool, error)
+	// DeleteByDevice removes the message only when it belongs to the given
+	// device; the bool reports whether such a message existed.
+	DeleteByDevice(device string, id uint64) (bool, error)
 	// DeleteAll removes every stored message.
 	DeleteAll() error
+	// DeleteAllByDevice removes every message that belongs to the device.
+	DeleteAllByDevice(device string) error
 
 	TokenHash() ([]byte, error)
 	SetTokenHash(h []byte) error
@@ -124,6 +132,10 @@ func (s *bboltStore) Add(m *Message) (uint64, error) {
 }
 
 func (s *bboltStore) Recent(limit int, since uint64) ([]Message, error) {
+	return s.RecentByDevice("", limit, since)
+}
+
+func (s *bboltStore) RecentByDevice(device string, limit int, since uint64) ([]Message, error) {
 	if limit <= 0 {
 		return []Message{}, nil
 	}
@@ -145,7 +157,9 @@ func (s *bboltStore) Recent(limit int, since uint64) ([]Message, error) {
 				return err
 			}
 			m.ID = id
-			out = append(out, m)
+			if device == "" || m.SourceDevice() == device {
+				out = append(out, m)
+			}
 			k, _ = c.Prev()
 		}
 		return nil
@@ -175,19 +189,77 @@ func (s *bboltStore) Delete(id uint64) (bool, error) {
 	return existed, err
 }
 
+func (s *bboltStore) DeleteByDevice(device string, id uint64) (bool, error) {
+	if device == "" {
+		return s.Delete(id)
+	}
+	var existed bool
+	err := s.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(bucketMessages))
+		mb := tx.Bucket([]byte(bucketMeta))
+		k := uint64Bytes(id)
+		raw := b.Get(k)
+		if raw == nil {
+			return nil // not exists
+		}
+		var m Message
+		if err := json.Unmarshal(raw, &m); err != nil {
+			return err
+		}
+		if m.SourceDevice() != device {
+			return nil // belongs to another device
+		}
+		existed = true
+		if err := b.Delete(k); err != nil {
+			return err
+		}
+		count := metaUint64(mb, keyCount)
+		if count > 0 {
+			count--
+		}
+		return mb.Put(keyCount, uint64Bytes(count))
+	})
+	return existed, err
+}
+
 func (s *bboltStore) DeleteAll() error {
+	return s.DeleteAllByDevice("")
+}
+
+// DeleteAllByDevice removes every message matching the device (or all when
+// device=="").
+func (s *bboltStore) DeleteAllByDevice(device string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		// Delete keys in place: recreating the bucket would reset its
 		// NextSequence counter, breaking ID monotonicity. Keep the bucket so
 		// IDs keep increasing across a bulk delete (never reused).
 		b := tx.Bucket([]byte(bucketMessages))
+		// Collect matching keys first: deleting while walking the cursor
+		// shifts positions and would skip entries.
+		var keys [][]byte
 		c := b.Cursor()
-		for k, _ := c.First(); k != nil; k, _ = c.First() {
-			if err := c.Delete(); err != nil {
+		for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			if device != "" {
+				var m Message
+				if err := json.Unmarshal(b.Get(k), &m); err != nil {
+					return err
+				}
+				if m.SourceDevice() != device {
+					continue
+				}
+			}
+			keys = append(keys, append([]byte{}, k...))
+		}
+		for _, k := range keys {
+			if err := b.Delete(k); err != nil {
 				return err
 			}
 		}
-		return tx.Bucket([]byte(bucketMeta)).Put(keyCount, uint64Bytes(0))
+		count := metaUint64(tx.Bucket([]byte(bucketMeta)), keyCount)
+		if uint64(len(keys)) > count {
+			return tx.Bucket([]byte(bucketMeta)).Put(keyCount, uint64Bytes(0))
+		}
+		return tx.Bucket([]byte(bucketMeta)).Put(keyCount, uint64Bytes(count-uint64(len(keys))))
 	})
 }
 
@@ -265,6 +337,10 @@ func (s *memoryStore) Add(m *Message) (uint64, error) {
 }
 
 func (s *memoryStore) Recent(limit int, since uint64) ([]Message, error) {
+	return s.RecentByDevice("", limit, since)
+}
+
+func (s *memoryStore) RecentByDevice(device string, limit int, since uint64) ([]Message, error) {
 	if limit <= 0 {
 		return []Message{}, nil
 	}
@@ -276,7 +352,10 @@ func (s *memoryStore) Recent(limit int, since uint64) ([]Message, error) {
 		if since != 0 && id >= since {
 			continue
 		}
-		out = append(out, s.msgs[id])
+		m := s.msgs[id]
+		if device == "" || m.SourceDevice() == device {
+			out = append(out, m)
+		}
 	}
 	return out, nil
 }
@@ -284,8 +363,18 @@ func (s *memoryStore) Recent(limit int, since uint64) ([]Message, error) {
 func (s *memoryStore) Delete(id uint64) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, ok := s.msgs[id]; !ok {
-		return false, nil
+	return s.deleteLocked(id, ""), nil
+}
+
+// deleteLocked removes the message when it exists and (when device != "")
+// belongs to that device.
+func (s *memoryStore) deleteLocked(id uint64, device string) bool {
+	m, ok := s.msgs[id]
+	if !ok {
+		return false
+	}
+	if device != "" && m.SourceDevice() != device {
+		return false
 	}
 	delete(s.msgs, id)
 	for i, oid := range s.order {
@@ -294,7 +383,16 @@ func (s *memoryStore) Delete(id uint64) (bool, error) {
 			break
 		}
 	}
-	return true, nil
+	return true
+}
+
+func (s *memoryStore) DeleteByDevice(device string, id uint64) (bool, error) {
+	if device == "" {
+		return s.Delete(id)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.deleteLocked(id, device), nil
 }
 
 func (s *memoryStore) DeleteAll() error {
@@ -303,6 +401,20 @@ func (s *memoryStore) DeleteAll() error {
 	s.msgs = make(map[uint64]Message)
 	s.order = nil
 	// seq intentionally keeps increasing so IDs stay monotonic across clears.
+	return nil
+}
+
+func (s *memoryStore) DeleteAllByDevice(device string) error {
+	if device == "" {
+		return s.DeleteAll()
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, m := range s.msgs {
+		if m.SourceDevice() == device {
+			s.deleteLocked(id, device)
+		}
+	}
 	return nil
 }
 

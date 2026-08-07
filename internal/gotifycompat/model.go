@@ -12,4 +12,30 @@ type Message struct {
 	Priority int                    `json:"priority"`
 	Extras   map[string]interface{} `json:"extras"`
 	Date     string                 `json:"date"`
+	// DeviceKey records which device_key produced this message, used for
+	// device-scoped history reads and stream fan-out. It is persisted for
+	// filtering but kept out of the wire extras visible to the bridge (which
+	// already carries device_key in extras).
+	DeviceKey string `json:"-"`
+}
+
+// SourceDevice returns the device this message originated from, reading the
+// stored field and falling back to the extras (for previously persisted rows).
+func (m *Message) SourceDevice() string {
+	if m.DeviceKey != "" {
+		return m.DeviceKey
+	}
+	if dk, ok := m.Extras["device_key"].(string); ok {
+		return dk
+	}
+	return ""
+}
+
+// deviceOf extracts the device key from the extras map (the source of truth on
+// the push path).
+func deviceOf(extras map[string]interface{}) string {
+	if dk, ok := extras["device_key"].(string); ok {
+		return dk
+	}
+	return ""
 }

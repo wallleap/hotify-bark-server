@@ -10,29 +10,42 @@ import "sync"
 type Hub struct {
 	mu   sync.RWMutex
 	next uint64
-	subs map[uint64]chan Message
+	subs map[uint64]subscriber
+}
+
+// subscriber ties a channel to an optional device filter. device=="" means the
+// subscriber hears every message.
+type subscriber struct {
+	ch     chan Message
+	device string
 }
 
 func newHub() *Hub {
-	return &Hub{subs: make(map[uint64]chan Message)}
+	return &Hub{subs: make(map[uint64]subscriber)}
 }
 
-// Subscribe registers a client and returns its message channel together with
-// an unsubscribe function. After Unsubscribe is called, the channel is closed
-// and must no longer be used for sending.
+// Subscribe registers a client that receives every message and returns its
+// message channel together with an unsubscribe function.
 func (h *Hub) Subscribe() (<-chan Message, func()) {
+	return h.SubscribeByDevice("")
+}
+
+// SubscribeByDevice registers a client filtered to a single device (device==""
+// disables the filter). After Unsubscribe is called, the channel is closed and
+// must no longer be used for sending.
+func (h *Hub) SubscribeByDevice(device string) (<-chan Message, func()) {
 	h.mu.Lock()
 	id := h.next
 	h.next++
 	ch := make(chan Message, 32)
-	h.subs[id] = ch
+	h.subs[id] = subscriber{ch: ch, device: device}
 	h.mu.Unlock()
 
 	return ch, func() {
 		h.mu.Lock()
-		if c, ok := h.subs[id]; ok {
+		if s, ok := h.subs[id]; ok {
 			delete(h.subs, id)
-			close(c)
+			close(s.ch)
 		}
 		h.mu.Unlock()
 	}
@@ -45,13 +58,17 @@ func (h *Hub) SubscriberCount() int {
 	return len(h.subs)
 }
 
-// Publish delivers a message to every subscriber, dropping slow ones.
+// Publish delivers a message to every subscriber whose filter matches, dropping
+// slow ones.
 func (h *Hub) Publish(m Message) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	for _, ch := range h.subs {
+	for _, s := range h.subs {
+		if s.device != "" && m.SourceDevice() != s.device {
+			continue
+		}
 		select {
-		case ch <- m:
+		case s.ch <- m:
 		default: // slow/backpressured subscriber: drop to protect the hub
 		}
 	}

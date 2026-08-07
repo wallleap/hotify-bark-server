@@ -151,10 +151,23 @@ func (s *Service) Messages(limit int, since uint64) ([]Message, error) {
 	return s.store.Recent(limit, since)
 }
 
+// MessagesByDevice returns up to limit stored messages for a single device
+// newest-first, optionally filtered to ID < since. device=="" returns all
+// messages (same as Messages).
+func (s *Service) MessagesByDevice(device string, limit int, since uint64) ([]Message, error) {
+	return s.store.RecentByDevice(device, limit, since)
+}
+
 // DeleteMessage removes the message with the given ID; the bool reports
 // whether it existed (used to answer 404 like gotify does).
 func (s *Service) DeleteMessage(id uint64) (bool, error) {
 	return s.store.Delete(id)
+}
+
+// DeleteMessageByDevice removes the message only when it belongs to device;
+// the bool reports whether such a message existed.
+func (s *Service) DeleteMessageByDevice(device string, id uint64) (bool, error) {
+	return s.store.DeleteByDevice(device, id)
 }
 
 // DeleteAllMessages removes every stored message.
@@ -162,10 +175,22 @@ func (s *Service) DeleteAllMessages() error {
 	return s.store.DeleteAll()
 }
 
+// DeleteAllMessagesByDevice removes every stored message belonging to device
+// (device=="" removes everything).
+func (s *Service) DeleteAllMessagesByDevice(device string) error {
+	return s.store.DeleteAllByDevice(device)
+}
+
 // Subscribe registers a live message consumer. The returned channel is closed
 // by the returned unsubscribe func.
 func (s *Service) Subscribe() (<-chan Message, func()) {
 	return s.hub.Subscribe()
+}
+
+// SubscribeByDevice registers a live consumer filtered to a single device
+// (device=="" disables the filter, same as Subscribe).
+func (s *Service) SubscribeByDevice(device string) (<-chan Message, func()) {
+	return s.hub.SubscribeByDevice(device)
 }
 
 // SubscriberCount returns the number of live /stream subscribers.
@@ -181,12 +206,13 @@ func (s *Service) Publish(title, body string, priority int, extras map[string]in
 		extras = map[string]interface{}{}
 	}
 	m := Message{
-		AppID:    defaultAppID,
-		Title:    title,
-		Message:  body,
-		Priority: priority,
-		Extras:   extras,
-		Date:     time.Now().Format(time.RFC3339Nano),
+		AppID:     defaultAppID,
+		Title:     title,
+		Message:   body,
+		Priority:  priority,
+		Extras:    extras,
+		Date:      time.Now().Format(time.RFC3339Nano),
+		DeviceKey: deviceOf(extras),
 	}
 	id, err := s.store.Add(&m)
 	if err != nil {

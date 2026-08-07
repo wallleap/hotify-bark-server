@@ -461,7 +461,135 @@ func TestDeleteAllMessages(t *testing.T) {
 	}
 }
 
-// TestDeleteOnMemoryStore exercises single + bulk deletion on the degraded
+// msgFor publishes a message tagged to a specific device key.
+func publishDevice(t *testing.T, svc *Service, device string, n int) {
+	t.Helper()
+	for i := 0; i < n; i++ {
+		if err := svc.Publish("t", "b", 0, map[string]interface{}{"device_key": device}); err != nil {
+			t.Fatalf("Publish(%s): %v", device, err)
+		}
+	}
+}
+
+// TestStoreRecentByDevice verifies device-scoped reads only surface that
+// device's messages (bbolt + memory), and deviceKey == "" returns everything.
+func TestStoreRecentByDevice(t *testing.T) {
+	svc := buildTestService(t, "")
+	publishDevice(t, svc, "k1", 3)
+	publishDevice(t, svc, "k2", 2)
+
+	// device-scoped read only returns that device's messages, newest first.
+	for _, device := range []string{"k1", "k2"} {
+		msgs, err := svc.MessagesByDevice(device, 100, 0)
+		if err != nil {
+			t.Fatalf("MessagesByDevice(%s): %v", device, err)
+		}
+		want := 3
+		if device == "k2" {
+			want = 2
+		}
+		if len(msgs) != want {
+			t.Fatalf("MessagesByDevice(%s) want %d, got %d", device, want, len(msgs))
+		}
+		for _, m := range msgs {
+			if m.SourceDevice() != device {
+				t.Fatalf("got a message from device %q, want %q", m.SourceDevice(), device)
+			}
+		}
+	}
+
+	// "" returns everything
+	all, err := svc.MessagesByDevice("", 100, 0)
+	if err != nil {
+		t.Fatalf("MessagesByDevice(all): %v", err)
+	}
+	if len(all) != 5 {
+		t.Fatalf("MessagesByDevice(all) want 5, got %d", len(all))
+	}
+
+	// since filter within a device
+	msgs, _ := svc.MessagesByDevice("k1", 100, 3)
+	if len(msgs) != 2 { // ids 1,2 remain (< since=3)
+		t.Fatalf("MessagesByDevice(k1, since=3) want 2, got %d", len(msgs))
+	}
+}
+
+// TestMessagesByDeviceOnMemoryStore: the degraded in-memory store must apply
+// the same device isolation.
+func TestMessagesByDeviceOnMemoryStore(t *testing.T) {
+	svc := buildMemoryFallbackService(t)
+	publishDevice(t, svc, "d1", 2)
+	publishDevice(t, svc, "d2", 1)
+	msgs, _ := svc.MessagesByDevice("d1", 100, 0)
+	if len(msgs) != 2 {
+		t.Fatalf("memory store: MessagesByDevice(d1) want 2, got %d", len(msgs))
+	}
+	all, _ := svc.MessagesByDevice("", 100, 0)
+	if len(all) != 3 {
+		t.Fatalf("memory store: all want 3, got %d", len(all))
+	}
+}
+
+// TestDeleteByDevice: wiping one device's history leaves the other intact, and
+// deleting a message ID that belongs to another device reports 404 (false).
+func TestDeleteByDevice(t *testing.T) {
+	svc := buildTestService(t, "")
+	publishDevice(t, svc, "d1", 2) // ids 1,2
+	publishDevice(t, svc, "d2", 2) // ids 3,4
+
+	// deleting d2's id from d1's scope must report not-existed
+	ok, err := svc.DeleteMessageByDevice("d1", 3)
+	if err != nil {
+		t.Fatalf("DeleteMessageByDevice: %v", err)
+	}
+	if ok {
+		t.Fatal("message 3 belongs to d2, must not be deletable from d1 scope")
+	}
+
+	// bulk-delete d1
+	if err := svc.DeleteAllMessagesByDevice("d1"); err != nil {
+		t.Fatalf("DeleteAllMessagesByDevice(d1): %v", err)
+	}
+	d1, _ := svc.MessagesByDevice("d1", 100, 0)
+	if len(d1) != 0 {
+		t.Fatalf("d1 messages should be empty, got %d", len(d1))
+	}
+	d2, _ := svc.MessagesByDevice("d2", 100, 0)
+	if len(d2) != 2 {
+		t.Fatalf("d2 messages should be untouched (2), got %d", len(d2))
+	}
+}
+
+// TestSubscribeByDevice: a device-scoped subscriber only hears its own device's
+// messages, never another device's, while a wildcard subscriber hears all.
+func TestSubscribeByDevice(t *testing.T) {
+	svc := buildTestService(t, "")
+	chD1, unD1 := svc.SubscribeByDevice("k1")
+	defer unD1()
+	chAll, unAll := svc.SubscribeByDevice("")
+	defer unAll()
+
+	_ = svc.Publish("t", "b", 0, map[string]interface{}{"device_key": "k1"})
+	if m := <-chD1; m.SourceDevice() != "k1" {
+		t.Fatalf("k1 subscriber got %q", m.SourceDevice())
+	}
+	if m := <-chAll; m.SourceDevice() != "k1" {
+		t.Fatalf("wildcard subscriber got %q", m.SourceDevice())
+	}
+
+	// a k2 message must NOT reach the k1 subscriber
+	_ = svc.Publish("t", "b", 0, map[string]interface{}{"device_key": "k2"})
+	if m := <-chAll; m.SourceDevice() != "k2" {
+		t.Fatalf("wildcard subscriber should get k2, got %q", m.SourceDevice())
+	}
+	select {
+	case m := <-chD1:
+		t.Fatalf("k1 subscriber must NOT receive k2 message, got %q", m.SourceDevice())
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+// TestDeleteOnMemoryStore covers single + bulk deletion on the degraded
 // in-memory store.
 func TestDeleteOnMemoryStore(t *testing.T) {
 	svc := buildMemoryFallbackService(t)
