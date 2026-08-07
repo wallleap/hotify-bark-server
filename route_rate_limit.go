@@ -40,8 +40,9 @@ func limitIP(c *fiber.Ctx) error {
 
 // rateLimitMiddleware rejects requests that exceed the configured per-IP limit.
 // It applies to /register and /mcp* (abuse-prone, always limited when enabled).
+// When no limiter is configured (rate limiting disabled), requests pass through.
 func rateLimitMiddleware(c *fiber.Ctx) error {
-	if ipLimiter == nil || !ipLimiter.Allow(c.IP()) {
+	if ratelimit.ShouldLimit(ipLimiter, c.IP()) {
 		return limitIP(c)
 	}
 	return c.Next()
@@ -53,7 +54,7 @@ func rateLimitPushMiddleware(c *fiber.Ctx) error {
 	if !rateLimitPush {
 		return c.Next()
 	}
-	if ipLimiter == nil || !ipLimiter.Allow(c.IP()) {
+	if ratelimit.ShouldLimit(ipLimiter, c.IP()) {
 		return limitIP(c)
 	}
 	return c.Next()

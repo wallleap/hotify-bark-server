@@ -69,3 +69,14 @@ func (l *Limiter) Allow(key string) bool {
 	}
 	return false
 }
+
+// ShouldLimit reports whether a request from key should be rejected as
+// rate-limited: it is true only when a limiter is configured AND the key has
+// exceeded its budget. A nil limiter (rate limiting disabled) never limits.
+// This lets middleware pass through requests when limiting is not configured.
+func ShouldLimit(l *Limiter, key string) bool {
+	if l == nil {
+		return false
+	}
+	return !l.Allow(key)
+}

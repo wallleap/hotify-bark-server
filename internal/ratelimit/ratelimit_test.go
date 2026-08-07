@@ -98,3 +98,31 @@ func TestConcurrentSafe(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// TestShouldLimitNilLimiter guards the "disabled limiter must pass through"
+// semantics: a nil limiter must never rate-limit (otherwise /register and
+// /mcp* would 429 on every request when rate limiting is not configured).
+func TestShouldLimitNilLimiter(t *testing.T) {
+	if ShouldLimit(nil, "ip") {
+		t.Fatal("nil limiter (rate limiting disabled) must not limit")
+	}
+}
+
+func TestShouldLimitAllowsWithinBurst(t *testing.T) {
+	l := New(5, 2)
+	for i := 0; i < 5; i++ {
+		if ShouldLimit(l, "ip1") {
+			t.Fatalf("request %d within burst must not be limited", i+1)
+		}
+	}
+}
+
+func TestShouldLimitExceedsBurst(t *testing.T) {
+	l := New(5, 2)
+	for i := 0; i < 5; i++ {
+		ShouldLimit(l, "ip1")
+	}
+	if !ShouldLimit(l, "ip1") {
+		t.Fatal("request beyond burst must be limited")
+	}
+}
