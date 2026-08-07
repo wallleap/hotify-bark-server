@@ -98,6 +98,11 @@ func routerSetup(router fiber.Router) {
 			Output:     redactingWriter{w: os.Stdout},
 		}))
 		router.Use(fiberrecover.New())
+		// Instrument every request (guarded: barkMetrics is nil until
+		// runServer initializes it).
+		if barkMetrics != nil {
+			router.Use(barkMetrics.Middleware())
+		}
 		sort.Sort(routes)
 		for _, r := range routes {
 			r.Func(router)

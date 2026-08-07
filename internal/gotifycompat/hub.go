@@ -38,6 +38,13 @@ func (h *Hub) Subscribe() (<-chan Message, func()) {
 	}
 }
 
+// SubscriberCount reports the number of live subscribers.
+func (h *Hub) SubscriberCount() int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return len(h.subs)
+}
+
 // Publish delivers a message to every subscriber, dropping slow ones.
 func (h *Hub) Publish(m Message) {
 	h.mu.RLock()

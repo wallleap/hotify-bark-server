@@ -11,6 +11,8 @@ import (
 	"github.com/wallleap/hotify-bark-server/apns"
 	"github.com/wallleap/hotify-bark-server/database"
 	"github.com/wallleap/hotify-bark-server/internal/gotifycompat"
+	"github.com/wallleap/hotify-bark-server/internal/logging"
+	"github.com/wallleap/hotify-bark-server/internal/metrics"
 
 	jsoniter "github.com/json-iterator/go"
 
@@ -27,6 +29,10 @@ var (
 )
 
 var db database.Database
+
+// barkMetrics is the global Prometheus registry. Registered as nil until
+// runServer initializes it, so package-level routes can safely reference it.
+var barkMetrics *metrics.Registry
 
 func main() {
 	app := &cli.App{
@@ -48,6 +54,10 @@ func main() {
 	}
 }
 func runServer(c *cli.Context) error {
+	if err := applyLogConfig(c); err != nil {
+		return err
+	}
+	barkMetrics = metrics.New()
 	network := determineNetwork(c)
 	fiberApp := createFiberApp(c, network)
 	setupRouter(c, fiberApp)
@@ -56,6 +66,23 @@ func runServer(c *cli.Context) error {
 	setupRateLimits(c.Int("rate-limit-ip"), c.Int("rate-limit-burst"), c.Bool("rate-limit-push"))
 	setupGracefulShutdown(fiberApp)
 	return startServer(c, fiberApp, network)
+}
+
+// applyLogConfig applies --log-level and --log-format to the mritd logger.
+// Invalid values are reported as startup errors rather than being silently
+// ignored.
+func applyLogConfig(c *cli.Context) error {
+	lvl, err := logging.ParseLevel(c.String("log-level"))
+	if err != nil {
+		return err
+	}
+	fmtLevel, err := logging.ParseFormat(c.String("log-format"))
+	if err != nil {
+		return err
+	}
+	logging.ApplyLevel(lvl)
+	logging.ApplyFormat(fmtLevel)
+	return nil
 }
 
 // initGotifyCompat initializes the gotify-compatible monitoring interface
@@ -384,6 +411,18 @@ func getAppFlags() []cli.Flag {
 			EnvVars: []string{"BARK_SERVER_IDLE_TIMEOUT"},
 			Value:   10 * time.Second,
 			Hidden:  true,
+		},
+		&cli.StringFlag{
+			Name:    "log-level",
+			Usage:   "Log level: debug|info|warn|error (default info)",
+			EnvVars: []string{"BARK_SERVER_LOG_LEVEL"},
+			Value:   "",
+		},
+		&cli.StringFlag{
+			Name:    "log-format",
+			Usage:   "Log format: console|json (default console)",
+			EnvVars: []string{"BARK_SERVER_LOG_FORMAT"},
+			Value:   "",
 		},
 	}
 }

@@ -318,6 +318,30 @@ func TestHubFanout(t *testing.T) {
 	}
 }
 
+func TestSubscriberCount(t *testing.T) {
+	svc := buildTestService(t, "")
+	if n := svc.SubscriberCount(); n != 0 {
+		t.Fatalf("want 0 subscribers, got %d", n)
+	}
+	ch1, un1 := svc.Subscribe()
+	defer un1()
+	ch2, un2 := svc.Subscribe()
+	defer un2()
+	if n := svc.SubscriberCount(); n != 2 {
+		t.Fatalf("want 2 subscribers, got %d", n)
+	}
+	un1()
+	if n := svc.SubscriberCount(); n != 1 {
+		t.Fatalf("want 1 subscriber after unsub, got %d", n)
+	}
+	_ = ch1
+	un2()
+	if n := svc.SubscriberCount(); n != 0 {
+		t.Fatalf("want 0 subscribers after all unsub, got %d", n)
+	}
+	_ = ch2
+}
+
 func TestMessageJSONWireShape(t *testing.T) {
 	svc := buildTestService(t, "")
 	_ = svc.Publish("title", "body", 2, map[string]interface{}{"device_key": "k", "subtitle": "sub"})

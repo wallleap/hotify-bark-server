@@ -149,6 +149,10 @@ func routeGotifyStreamUpgrade(c *fiber.Ctx) error {
 func routeGotifyStream(conn *fiberws.Conn) {
 	ch, unsubscribe := gotifyService.Subscribe()
 	defer unsubscribe()
+	if barkMetrics != nil {
+		barkMetrics.SetActiveStreams(float64(gotifyService.SubscriberCount()))
+		defer barkMetrics.SetActiveStreams(float64(gotifyService.SubscriberCount()))
+	}
 
 	conn.SetReadLimit(512)
 	conn.SetReadDeadline(time.Now().Add(60 * time.Second))

@@ -29,6 +29,14 @@ func init() {
 			return c.SendString("ok")
 		})
 
+		// metrics exposes Prometheus metrics (HTTP counters + Go/process).
+		router.Get("/metrics", func(c *fiber.Ctx) error {
+			if barkMetrics == nil {
+				return c.Status(503).JSON(failed(503, "metrics not initialized"))
+			}
+			return barkMetrics.Handler()(c)
+		})
+
 		// info func returns information about the server version
 		router.Get("/info", func(c *fiber.Ctx) error {
 			resp := map[string]interface{}{

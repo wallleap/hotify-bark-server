@@ -168,6 +168,11 @@ func (s *Service) Subscribe() (<-chan Message, func()) {
 	return s.hub.Subscribe()
 }
 
+// SubscriberCount returns the number of live /stream subscribers.
+func (s *Service) SubscriberCount() int {
+	return s.hub.SubscriberCount()
+}
+
 // Publish persists a message and fan-outs it to all subscribers. Persistence
 // errors are returned to the caller, which must never block or alter the
 // originating push.
