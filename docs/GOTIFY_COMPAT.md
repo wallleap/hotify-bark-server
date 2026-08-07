@@ -57,7 +57,7 @@ iOS 侧投递成败**不影响**这条监测流（hotify-bridge 拿到消息后�
 在桥的 `bridge_config.yaml` 中配置（或环境变量 `GOTIFY_HTTP_URL` / `GOTIFY_CLIENT_TOKEN`）：
 
 ```yaml
-gotify_url: http://<bark-host>:8080
+gotify_url: http://<bark-host>:18080
 gotify_token: <上面拿到的 client token>
 ```
 
