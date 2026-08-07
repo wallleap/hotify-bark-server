@@ -266,6 +266,10 @@ tasks:
       - task: darwin_arm64
       - task: freebsd_amd64
       - task: freebsd_arm64
+  changelog:
+    desc: Regenerate CHANGELOG.md from conventional commits (git-chglog)
+    cmds:
+      - git-chglog "v0.1.0.." -o CHANGELOG.md
   release:
     cmds:
       - task: default
