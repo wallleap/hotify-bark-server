@@ -101,24 +101,30 @@
 8. 【🟠中危】**容器以 root 运行**：确认 `Dockerfile`（`deploy/Dockerfile`）最终阶段 `FROM alpine` 未 `USER` 降权，默认以 root 运行。
 
 ### 2.3 安全加固建议（对应修订后状态）
-- ✅ 文档中附加公网部署提示：未做，建议补齐（README 一键）。
+- ✅ 文档中附加公网部署提示：未做，建议补齐（README 一键）。→ 已补齐 `README.md`「安全建议（公网部署必备）」小节。
 - ⬜ MCP 复用 Basic Auth：现状**未强制**，建议在文档/实现中明确或强制。
 - ⬜ API Key 模式、多密钥管理：未实现。
 - ⬜ 单 Device 频率限制、设备拉黑/禁用接口：未实现。
 - ⬜ 内存/存储加密、消息保留时间清理：未实现。
 - ⬜ 强制 HTTPS 建议 + 反代最佳实践（帮反向代理配置）：文档未提。
-- ⬜ 全局限流中间件、Basic Auth 失败封禁、IP 白名单：未实现。
-- ⬜ 镜像非 root + Alpine 更新机制：未实现。
+- ✅ 全局限流中间件、Basic Auth 失败封禁、IP 白名单：未实现。→ 已加 IP 限流（`internal/ratelimit/`，`--rate-limit-ip` 作用于 `/register` `/mcp*`，`--rate-limit-push` 可覆盖推送端点；Basic Auth 失败封禁、IP 白名单仍未实现）。
+- ✅ 镜像非 root + Alpine 更新机制：未实现。→ 镜像已非 root（`app` uid 1000，见 `deploy/Dockerfile`）；Alpine 更新机制未实现。
+
+> 已落地项（具体见 `docs/DIFFERENCES.md` 与 README「安全建议」）：
+> - IP 限流：`--rate-limit-ip` / `--rate-limit-burst` / `--rate-limit-push`（`internal/ratelimit/`、`route_rate_limit.go`）。
+> - 镜像非 root：`app` 用户 + `USER app` + `/data` chown；同时修复了 entrypoint 改 `/etc/localtime` 在 `set -e` 下导致容器启动失败的问题。
+> - 无鉴权醒目警告：`route_auth.go` 未配置 Basic Auth 时打印多行 WARN 横幅。
+> - Helm PVC 持久化 + MySQL 凭据走 Secret（见 5.1/5.2）。
 
 ## 5、补充发现（原建议文档未覆盖）
 
 > 本节为深入核查中额外发现的优化点，原建议文档未提及。
 
 ### 5.1 Helm 部署数据不持久化（重点）
-⬜ `deploy/helm-chart/` 无 **PersistentVolumeClaim / volumeMount**，`/data` 走容器临时层，Pod 重建即丢注册数据与 gotify 记录。`values.yaml` 也仅在用 MySQL 时兜底。建议补 PVC + `volumeMounts`。
+✅ 已落地：`deploy/helm-chart/` 新增 **PVC** + `volumeMounts`（`pvc.yaml`、`deployment.yaml`），由 `values.yaml` 的 `persistence.enabled` / `storageClass` / `size` 控制，挂载 `/data`（bbolt + gotify.db）。
 
 ### 5.2 Helm 注入 MySQL 明文密钥（重点）
-`deploy/helm-chart/templates/deployment.yaml:55` 直接把 MySQL 用户名/密码拼进 `-dsn=...` 明文命令参数，未走 secret。凭据会出现在 Pod spec 与审计里，建议改用 env/secret 引用。
+✅ 已落地：`deployment.yaml:55` 的 `-dsn=...` 明文参数已移除，改为 `mysql-secret.yaml`（stringData）+ env `BARK_SERVER_DSN` 引用 Secret。
 
 ### 5.3 Gotify 消息上限不可配置
 `internal/gotifycompat/service.go:26` 有 `MaxMessages` 配置，但 `main.go:64` `initGotifyCompat` 构造 `Config` 时**未传入**，恒为默认 `1000`（`service.go:19`）。无法通过 CLI/env 调整监控消息保留条数。
@@ -127,7 +133,7 @@
 `route_misc.go:12` 的 `/info` 输出 `devices`（`db.CountAll`），无需鉴权即可得知在线设备规模，轻微信息泄露；建议在启用鉴权或管理接口下提供。
 
 ### 5.5 环境变量命名不一致
-`main.go:197` 为 `BARK_SERVER_ADDRESS`，而 `DATADIR` 是 `BARK_SERVER_DATA_DIR`（`main.go:215`)；README/AGENTS 使用的惯用名是 `BARK_SERVER_ADDR`（见 README `--addr`）——同一参数 EnvVar 与文档命名相左。建议统一（如 `BARK_SERVER_ADDR` / `BARK_SERVER_DATA`）。
+✅ 已解决：核对后确认 `main.go` 实际 EnvVar 为 `--addr` → `BARK_SERVER_ADDRESS`、`--data` → `BARK_SERVER_DATA_DIR`，与其它 flag 的 EnvVar 风格一致（Flag 名 ≠ EnvVar 全对应，属正常）。原 review 声称「README/AGENTS 惯用 `BARK_SERVER_ADDR`」实不成立——仓库从未使用过该名。已按实据在 README 参数表补齐 `BARK_SERVER_ADDRESS` / `BARK_SERVER_DATA_DIR`，代码未动。
 
 ### 5.6 APNs 投递过期与 `ttl` 各成体系
 `apns/apns.go:144` 固定 `Expiration = now+24h`；`ttl`（`route_push.go`）仅作用于**归档消息**保留，不参与 APNs 投递过期。如希望 ttl 控制投递时效需另做映射，当前语义不互通，建议在文档澄清。
@@ -142,12 +148,12 @@
 
 | 优先级 | 建议项 | 理由 |
 |---|---|---|
-| P0（安全） | 明确并强制 MCP 鉴权；默认无鉴权加醒目警告；/register、/push 限流 | 直接面对公网风险 |
-| P0 | Docker 镜像非 root、数据目录收紧 | 容器安全基线 |
-| P0 | Helm PVC 持久化 + MySQL 凭据走 secret（5.1/5.2） | K8s 数据不丢、避免明文密钥 |
+| P0（安全） | 明确并强制 MCP 鉴权；默认无鉴权加醒目警告；/register、/push 限流 | 直接面对公网风险 | ✅ /register、/mcp 限流 + 无鉴权警告已落地；MCP 强制鉴权未做 |
+| P0 | Docker 镜像非 root、数据目录收紧 | 容器安全基线 | ✅ 已落地（`app` 非 root + `/data` chown） |
+| P0 | Helm PVC 持久化 + MySQL 凭据走 secret（5.1/5.2） | K8s 数据不丢、避免明文密钥 | ✅ 已落地 |
 | P1 | 单 Device 推送频率限制 + 拉黑/禁用接口 | 泄露止损 |
 | P1 | 结构化 JSON 日志 / Prometheus 指标 | 可观测性 |
-| P1 | Gotify 消息上限可配置；统一环境变量命名（5.3/5.5） | 运维一致性 |
+| P1 | Gotify 消息上限可配置；统一环境变量命名（5.3/5.5） | 运维一致性 | 🟡 5.5 已解决（README 补齐实际 EnvVar）；5.3 未做 |
 | P2 | 消息按时间清理、订阅者上限 | 资源控制 |
 | P2 | APNs 连接池健康检测、批量异步削峰 | 性能 |
 | P3 | HMS 直连、YAML 配置、Bbolt↔MySQL 迁移 | 涉及架构/范围大 |
