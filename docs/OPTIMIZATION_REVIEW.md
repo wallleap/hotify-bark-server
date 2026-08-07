@@ -72,7 +72,7 @@
 🟡 已达标：`go.mod` 已为 `go 1.25.5`（超过建议 1.21+），依赖为 2025/2026 版本。建议中"升级至 1.21+"在实际已满足；但仍建议定期核对上游 bark-server 上游安全修复（本项目为独立 fork，不自动同步，见 `DIFFERENCES.md`）。
 
 ### 3.2 测试补充
-🟡 部分实现：`internal/gotifycompat/gotify_test.go` 较全；其余接口/MySQL/APNs 均缺（参考 `AGENTS.md` Testing 部分：`go test ./...` 仍受 `push_test.go` deviceToken 门槛）。
+🟡 已补充：新增 `apns/apns_test.go`（`IsEmptyAlert`/`IsDelete` 纯逻辑表驱动）与 `database/database_test.go`（`bbolt`/`membase`/`envbase` CRUD 与错误路径，bbolt 用临时目录）。连同已有 `gotifycompat`、`ratelimit`，可直接运行的测试覆盖正常路径 + 边界 + 部分错误路径。`package main` 的推送/路由测试仍受 `push_test.go` deviceToken 门槛（见 AGENTS.md）；MySQL 各分支因需真实 DSN 未覆盖。
 
 ### 3.3 统一错误码
 🟡 部分实现：已有统一 `try/fail` 结构 `CommonResp`（`router.go:97-124`），但错误码语义（HTTP/APNs codce 混合）未全局定义枚举。
