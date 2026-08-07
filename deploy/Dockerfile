@@ -16,7 +16,8 @@ ARG ALPINE_MIRROR=https://mirrors.aliyun.com
 RUN sed -i "s|https\?://[^/]*/alpine|${ALPINE_MIRROR%/}/alpine|" /etc/apk/repositories
 
 RUN set -ex \
-    && apk add git gcc libc-dev \
+    # && apk add git gcc libc-dev \
+    && apk add git libc-dev \
     && BUILD_VERSION=$(git describe --tags) \
     && BUILD_DATE=$(date "+%F %T") \
     && COMMIT_SHA1=$(git rev-parse HEAD) \
