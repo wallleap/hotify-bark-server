@@ -25,6 +25,12 @@ image:
   # Overrides the image tag whose default is the chart appVersion.
   tag: "v2.1.5"
 
+# 持久化存储（Bbolt 数据 /data，含 gotify.db）。启用时创建 PVC 并挂载 /data。
+persistence:
+  enabled: true
+  storageClass: ""
+  size: 1Gi
+
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
