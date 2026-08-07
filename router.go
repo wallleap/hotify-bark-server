@@ -89,10 +89,11 @@ func (r redactingWriter) Write(p []byte) (int, error) {
 func routerSetup(router fiber.Router) {
 	routerOnce.Do(func() {
 		router.Use(fiberlogger.New(fiberlogger.Config{
-			// Keep the full URL and body in the log, but mask the value of
-			// the gotify token query param (?token=<clientToken> → ?token=***)
-			// so the credential never lands on disk.
-			Format:     "${time}     INFO    ${ip} -> [${status}] ${method} ${latency} ${route} => ${url} ${body}\n",
+			// No ${body}: request payloads carry push content and credentials
+			// (device_token / device_key) and must not land in logs. Audit of
+			// what was pushed is served by the gotify compat history
+			// (/message). The token query param is masked by redactingWriter.
+			Format:     "${time}     INFO    ${ip} -> [${status}] ${method} ${latency} ${route} => ${url}\n",
 			TimeFormat: "2006-01-02 15:04:05",
 			Output:     redactingWriter{w: os.Stdout},
 		}))
