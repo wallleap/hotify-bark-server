@@ -29,7 +29,11 @@ func isAuthFreePath(urlPrefix, p string) bool {
 
 func routerAuth(user, passwd string, router fiber.Router, urlPrefix string) {
 	if user == "" && passwd == "" {
-		logger.Info("Hotify-Bark Server Has No Basic Auth.")
+		logger.Warn("************************************************************")
+		logger.Warn("Hotify-Bark Server Has NO Basic Auth.")
+		logger.Warn("PUBLIC deployments should set BARK_SERVER_BASIC_AUTH_USER/PASSWORD.")
+		logger.Warn("/push, /register, /mcp* and /:device_key are OPEN to everyone.")
+		logger.Warn("************************************************************")
 		return
 	}
 
