@@ -13,6 +13,9 @@
 | Basic Auth | 可选 `--user/--password`，`/ping` `/register` `/healthz` `/version` `/message` `/stream` 白名单 | |
 | MySQL TLS | `--mysql-tls` 及配套 `mysql-ca`/`mysql-client-cert`/`mysql-client-key`/`mysql-tls-name`/`mysql-tls-skip-verify` | |
 | Gotify 客户端 token | `--gotify-client-token`，SHA-256 哈希持久化，自动生成并打印一次 | |
+| IP 限流 | `--rate-limit-ip` / `--rate-limit-burst`，按来源 IP 对 `/register` `/mcp*` 限流（429）；推送端点 `/push` `/:device_key` 默认不限流，可经 `--rate-limit-push` 开启 | |
+| 镜像非 root | Dockerfile 以非 root 用户 `app` 运行，数据目录归属该用户 | |
+| Helm 持久化与密钥 | Helm chart 增加 PVC（`/data` 挂载）与 MySQL 凭据走 Secret（`BARK_SERVER_DSN` 从 secret 注入） | |
 
 ## 命名变更
 
@@ -21,6 +24,7 @@
 - Docker 镜像：`finab/bark-server` → `wallleap/hotify-bark-server`
 - HTTP ServerHeader：`Bark` → `Hotify-Bark`
 - CLI 名称 / 日志 / MCP 服务名均改为 Hotify-Bark 前缀
+- 无鉴权部署在启动日志给出醒目警告，提示公网部署需开启 Basic Auth
 
 ## 其它调整
 

@@ -18,3 +18,7 @@ services:
     #   BARK_SERVER_DSN: "user:pass@tcp(mysql_host)/bark"
     #   推送最大批量条数，默认 -1 不限制
     #   BARK_SERVER_MAX_BATCH_PUSH_COUNT: "100"
+    #   限流（公网/生产部署默认开启）：按来源 IP 对 /register /mcp* 以及推送端点 /push /:device_key 限流
+    #   BARK_SERVER_RATE_LIMIT_IP: "10"
+    #   BARK_SERVER_RATE_LIMIT_BURST: "10"
+    #   BARK_SERVER_RATE_LIMIT_PUSH: "true"

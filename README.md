@@ -122,9 +122,21 @@ systemctl enable --now hotify-bark-server
 | `--mysql-tls` `--mysql-ca` `--mysql-client-cert` `--mysql-client-key` `--mysql-tls-name` `--mysql-tls-skip-verify` | MySQL TLS 相关 |
 | `--max-batch-push-count` / `BARK_SERVER_MAX_BATCH_PUSH_COUNT` | 批量推送上限，默认 `-1` 不限 |
 | `--max-apns-client-count` | APNs 客户端连接数 |
+| `--rate-limit-ip` / `BARK_SERVER_RATE_LIMIT_IP` | 按来源 IP 对 `/register` `/mcp*` 限流（请求/秒），默认 `0` 关闭 |
+| `--rate-limit-burst` / `BARK_SERVER_RATE_LIMIT_BURST` | IP 限流突发窗口 token 数，默认等于 `rate-limit-ip` |
+| `--rate-limit-push` / `BARK_SERVER_RATE_LIMIT_PUSH` | 额外把限流应用到推送端点 `/push` 与 `/:device_key`（默认关闭，推送默认不限流） |
 | `--unix-socket`、`--url-prefix`、`--cert`/`--key` | 监听方式 / 前缀 / TLS |
 
 完整参数见 `./hotify-bark-server --help`。
+
+### 安全建议（公网部署必备）
+
+> **默认无鉴权**：未配置 Basic Auth 时，`/push`、`/register`、`/mcp*` 与 `/:device_key` 对全网开放（启动日志会给出醒目警告）。**公网部署务必**：
+
+1. 开启 Basic Auth：`BARK_SERVER_BASIC_AUTH_USER` / `BARK_SERVER_BASIC_AUTH_PASSWORD`（`/push`、`/register`、`/mcp*`、`/:device_key` 均受保护；白名单路径 `/ping /healthz /version /message /stream` 仍开放，其中 `/message` `/stream` 走 gotify token 鉴权）。
+2. 配置限流：`BARK_SERVER_RATE_LIMIT_IP=10`（每秒每 IP 最多 10 次）可缓解 CC / 刷注册。推送端点 `/push`、`/:device_key` 默认不限流（避免误伤正常推送），确需限制时再加 `BARK_SERVER_RATE_LIMIT_PUSH=true`。
+3. 建议前置 **HTTPS 反向代理**（如 Caddy / Nginx），并限制其仅转发到 `:8080`。
+4. 数据目录 `/data` 收紧为服务运行用户可读写。
 
 ### 依赖 hotify-bridge（Gotify 兼容监控）
 
