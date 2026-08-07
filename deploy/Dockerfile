@@ -49,10 +49,19 @@ RUN set -ex \
     && apk upgrade \
     && apk add --no-cache bash ca-certificates tzdata \
     && ln -sf /usr/share/zoneinfo/${TZ} /etc/localtime \
-    && echo ${TZ} > /etc/timezone
+    && echo ${TZ} > /etc/timezone \
+    && addgroup -S -g 1000 app \
+    && adduser -S -u 1000 -h /home/app -G app app
 
 COPY --from=builder /go/bin/hotify-bark-server /usr/local/bin/hotify-bark-server
 COPY --from=builder /go/src/github.com/wallleap/hotify-bark-server/deploy/entrypoint.sh /entrypoint.sh
+
+# Default data dir (overridable via BARK_SERVER_DATA_DIR / --data). Make it
+# writable by the non-root app user and switch to least privilege.
+ENV BARK_SERVER_DATA_DIR=/data
+RUN mkdir -p /data && chown -R app:app /data && chmod 755 /usr/local/bin/hotify-bark-server /entrypoint.sh
+
+USER app
 
 VOLUME /data
 

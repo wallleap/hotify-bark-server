@@ -2,7 +2,8 @@
 
 set -e
 
-ln -sf "/usr/share/zoneinfo/${TZ}" /etc/localtime
-echo "${TZ}" > /etc/timezone
+# The image runs as a non-root user, so /etc is not writable at runtime.
+# A default timezone symlink is baked into the image at build time (see
+# Dockerfile); drop runtime timezone mutation entirely.
 
 exec "$@"
