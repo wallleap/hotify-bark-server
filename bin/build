@@ -15,10 +15,42 @@ COMMIT_ID="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
 
 mkdir -p dist
 echo "==> 构建 $GOOS/$GOARCH -> $OUT (version=${VERSION}) ..."
-CGO_ENABLED=0 go build -trimpath -o "$OUT" \
+
+# 构建期间显示来回反弹动画（写到 stderr，用 \r 原地刷新；纯 ASCII 避免宽度错位）
+( 
+    width=20
+    pos=0
+    dir=1
+    while true; do
+        line=""
+        for ((i = 0; i < width; i++)); do
+            if [ "$i" -eq "$pos" ]; then line+='o'; else line+=' '; fi
+        done
+        printf '\r  [%s] 构建中' "$line"
+        pos=$(( pos + dir ))
+        [ "$pos" -ge "$width" ] && { pos=$(( width - 2 )); dir=-1; }
+        [ "$pos" -le 0 ] && { pos=1; dir=1; }
+        sleep 0.08
+    done
+) &
+SPIN_PID=$!
+
+# 保证无论成功/失败都停掉进度动画（wait 吸收子进程终止状态，避免打印 Terminated）
+cleanup() {
+    kill "${SPIN_PID:-}" 2>/dev/null || true
+    wait "${SPIN_PID:-}" 2>/dev/null || true
+    printf '\r%s\r' "$(printf ' %.0s' $(seq 1 30))"
+}
+trap cleanup EXIT
+
+if CGO_ENABLED=0 go build -trimpath -o "$OUT" \
     -ldflags "-w -s \
         -X 'main.version=${VERSION}' \
         -X 'main.buildDate=${BUILD_DATE}' \
-        -X 'main.commitID=${COMMIT_ID}'" .
-
-echo "==> 构建完成: $OUT ($GOOS/$GOARCH, version=${VERSION})"
+        -X 'main.commitID=${COMMIT_ID}'" .; then
+    cleanup
+    echo "==> 构建完成: $OUT ($GOOS/$GOARCH, version=${VERSION})"
+else
+    echo "==> 构建失败" >&2
+    exit 1
+fi
