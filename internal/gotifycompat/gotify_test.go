@@ -514,6 +514,86 @@ func TestStoreRecentByDevice(t *testing.T) {
 	}
 }
 
+// TestMessagesByDeviceLimitWithinDevice: the limit applies inside a device's
+// own history, independently of other devices' messages.
+func TestMessagesByDeviceLimitWithinDevice(t *testing.T) {
+	svc := buildTestService(t, "")
+	publishDevice(t, svc, "k1", 5) // ids 1..5
+	publishDevice(t, svc, "k2", 2) // ids 6,7 (interleaved, newer)
+
+	// limit=3 must return the 3 newest k1 messages (ids 5,4,3), newest first.
+	// k2's rows sit at newer ids but the device filter must skip them and keep
+	// walking back to gather k1's own three newest.
+	msgs, err := svc.MessagesByDevice("k1", 3, 0)
+	if err != nil {
+		t.Fatalf("MessagesByDevice(k1, 3): %v", err)
+	}
+	if len(msgs) != 3 {
+		t.Fatalf("device-scoped limit: want 3, got %d", len(msgs))
+	}
+	want := []uint64{5, 4, 3}
+	for i, m := range msgs {
+		if m.ID != want[i] {
+			t.Fatalf("msgs[%d].ID = %d, want %d", i, m.ID, want[i])
+		}
+		if m.SourceDevice() != "k1" {
+			t.Fatalf("msgs[%d] belongs to %q, want k1", i, m.SourceDevice())
+		}
+	}
+}
+
+// TestMessagesByDeviceNewestFirstWithinDevice: device-scoped reads must order
+// that device's own messages newest-first, skipping newer rows of other
+// devices in the middle.
+func TestMessagesByDeviceNewestFirstWithinDevice(t *testing.T) {
+	svc := buildTestService(t, "")
+	publishDevice(t, svc, "k1", 2) // ids 1,2
+	publishDevice(t, svc, "k2", 2) // ids 3,4
+	publishDevice(t, svc, "k1", 2) // ids 5,6
+
+	msgs, err := svc.MessagesByDevice("k1", 100, 0)
+	if err != nil {
+		t.Fatalf("MessagesByDevice(k1): %v", err)
+	}
+	if len(msgs) != 4 {
+		t.Fatalf("want 4 k1 messages, got %d", len(msgs))
+	}
+	// ids: 6,5,2,1 (newest first, k2's 3,4 skipped in the middle)
+	want := []uint64{6, 5, 2, 1}
+	for i, m := range msgs {
+		if m.ID != want[i] {
+			t.Fatalf("msgs[%d].ID = %d, want %d", i, m.ID, want[i])
+		}
+	}
+}
+
+// TestSourceDeviceFieldTakesPrecedence: SourceDevice must read the stored
+// DeviceKey field first and only fall back to extras when that field is empty
+// (guards the bbolt path, where DeviceKey is dropped by json:"-" and data comes
+// back through the extras fallback).
+func TestSourceDeviceFieldPrecedesExtras(t *testing.T) {
+	m := Message{
+		DeviceKey: "field",
+		Extras:    map[string]interface{}{"device_key": "extra"},
+	}
+	if got := m.SourceDevice(); got != "field" {
+		t.Fatalf("SourceDevice with populated field = %q, want %q", got, "field")
+	}
+
+	m = Message{
+		DeviceKey: "",
+		Extras:    map[string]interface{}{"device_key": "extra"},
+	}
+	if got := m.SourceDevice(); got != "extra" {
+		t.Fatalf("SourceDevice fallback to extras = %q, want %q", got, "extra")
+	}
+
+	m = Message{}
+	if got := m.SourceDevice(); got != "" {
+		t.Fatalf("SourceDevice on empty message = %q, want empty", got)
+	}
+}
+
 // TestMessagesByDeviceOnMemoryStore: the degraded in-memory store must apply
 // the same device isolation.
 func TestMessagesByDeviceOnMemoryStore(t *testing.T) {
