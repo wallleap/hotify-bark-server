@@ -16,13 +16,13 @@ type DeviceInfo struct {
 
 func init() {
 	registerRoute("register", func(router fiber.Router) {
-		router.Post("/register", func(c *fiber.Ctx) error { return doRegister(c, false) })
+		router.Post("/register", rateLimitMiddleware, func(c *fiber.Ctx) error { return doRegister(c, false) })
 		router.Get("/register/:device_key", doRegisterCheck)
 	})
 
 	// compatible with old requests
 	registerRouteWithWeight("register_compat", 100, func(router fiber.Router) {
-		router.Get("/register", func(c *fiber.Ctx) error { return doRegister(c, true) })
+		router.Get("/register", rateLimitMiddleware, func(c *fiber.Ctx) error { return doRegister(c, true) })
 	})
 }
 

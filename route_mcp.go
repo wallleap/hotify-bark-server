@@ -21,12 +21,12 @@ func init() {
 		mcpSpecificStreamable := setupSpecificMCPServer()
 
 		// Basic endpoint - requires device_key in tool arguments
-		router.All("/mcp", func(c *fiber.Ctx) error {
+		router.All("/mcp", rateLimitMiddleware, func(c *fiber.Ctx) error {
 			return adaptor.HTTPHandlerFunc(mcpGenericStreamable.ServeHTTP)(c)
 		})
 
 		// Device-specific endpoint - device_key is pre-filled from URL path
-		router.All("/mcp/:device_key", func(c *fiber.Ctx) error {
+		router.All("/mcp/:device_key", rateLimitMiddleware, func(c *fiber.Ctx) error {
 			deviceKey := c.Params("device_key")
 			return adaptor.HTTPHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				ctx := context.WithValue(r.Context(), deviceKeyCtxKey, deviceKey)

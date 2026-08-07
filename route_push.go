@@ -18,23 +18,23 @@ var maxBatchPushCount = -1
 
 func init() {
 	// V2 API
-	registerRoute("push", func(router fiber.Router) {
-		router.Post("/push", func(c *fiber.Ctx) error { return routeDoPush(c) })
+	registerRouteWithWeight("push", 50, func(router fiber.Router) {
+		router.Post("/push", rateLimitPushMiddleware, func(c *fiber.Ctx) error { return routeDoPush(c) })
 	})
 
 	// compatible with old requests
 	registerRouteWithWeight("push_compat", 1, func(router fiber.Router) {
-		router.Get("/:device_key", func(c *fiber.Ctx) error { return routeDoPush(c) })
-		router.Post("/:device_key", func(c *fiber.Ctx) error { return routeDoPush(c) })
+		router.Get("/:device_key", rateLimitPushMiddleware, func(c *fiber.Ctx) error { return routeDoPush(c) })
+		router.Post("/:device_key", rateLimitPushMiddleware, func(c *fiber.Ctx) error { return routeDoPush(c) })
 
-		router.Get("/:device_key/:body", func(c *fiber.Ctx) error { return routeDoPush(c) })
-		router.Post("/:device_key/:body", func(c *fiber.Ctx) error { return routeDoPush(c) })
+		router.Get("/:device_key/:body", rateLimitPushMiddleware, func(c *fiber.Ctx) error { return routeDoPush(c) })
+		router.Post("/:device_key/:body", rateLimitPushMiddleware, func(c *fiber.Ctx) error { return routeDoPush(c) })
 
-		router.Get("/:device_key/:title/:body", func(c *fiber.Ctx) error { return routeDoPush(c) })
-		router.Post("/:device_key/:title/:body", func(c *fiber.Ctx) error { return routeDoPush(c) })
+		router.Get("/:device_key/:title/:body", rateLimitPushMiddleware, func(c *fiber.Ctx) error { return routeDoPush(c) })
+		router.Post("/:device_key/:title/:body", rateLimitPushMiddleware, func(c *fiber.Ctx) error { return routeDoPush(c) })
 
-		router.Get("/:device_key/:title/:subtitle/:body", func(c *fiber.Ctx) error { return routeDoPush(c) })
-		router.Post("/:device_key/:title/:subtitle/:body", func(c *fiber.Ctx) error { return routeDoPush(c) })
+		router.Get("/:device_key/:title/:subtitle/:body", rateLimitPushMiddleware, func(c *fiber.Ctx) error { return routeDoPush(c) })
+		router.Post("/:device_key/:title/:subtitle/:body", rateLimitPushMiddleware, func(c *fiber.Ctx) error { return routeDoPush(c) })
 	})
 }
 

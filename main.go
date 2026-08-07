@@ -53,6 +53,7 @@ func runServer(c *cli.Context) error {
 	setupRouter(c, fiberApp)
 	initializeDatabase(c)
 	initGotifyCompat(c)
+	setupRateLimits(c.Int("rate-limit-ip"), c.Int("rate-limit-burst"), c.Bool("rate-limit-push"))
 	setupGracefulShutdown(fiberApp)
 	return startServer(c, fiberApp, network)
 }
@@ -330,6 +331,24 @@ func getAppFlags() []cli.Flag {
 			EnvVars: []string{"BARK_SERVER_MAX_APNS_CLIENT_COUNT"},
 			Value:   1,
 			Action:  func(ctx *cli.Context, v int) error { return apns.ReCreateAPNS(v) },
+		},
+		&cli.IntFlag{
+			Name:    "rate-limit-ip",
+			Usage:   "Per-IP request rate limit (requests per second) on /register and /mcp; 0 disables",
+			EnvVars: []string{"BARK_SERVER_RATE_LIMIT_IP"},
+			Value:   0,
+		},
+		&cli.IntFlag{
+			Name:    "rate-limit-burst",
+			Usage:   "Burst window (tokens) for the IP rate limit; must be >= 1, defaults to rate",
+			EnvVars: []string{"BARK_SERVER_RATE_LIMIT_BURST"},
+			Value:   0,
+		},
+		&cli.BoolFlag{
+			Name:    "rate-limit-push",
+			Usage:   "Also apply the IP rate limit to /push and /:device_key push endpoints (unlimited by default)",
+			EnvVars: []string{"BARK_SERVER_RATE_LIMIT_PUSH"},
+			Value:   false,
 		},
 		&cli.IntFlag{
 			Name:    "concurrency",
