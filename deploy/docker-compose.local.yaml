@@ -19,6 +19,8 @@ services:
     # environment:
     #   Gotify 兼容监控：供 hotify-bridge 监测推送。可省略，未设置时自动生成并打印一次
     #   BARK_SERVER_GOTIFY_CLIENT_TOKEN: "your-gotify-client-token"
+    #   监控消息保留上限，默认 0 即内置默认 1000
+    #   BARK_SERVER_GOTIFY_MAX_MESSAGES: "1000"
     #   可选 Basic Auth
     #   BARK_SERVER_BASIC_AUTH_USER: "admin"
     #   BARK_SERVER_BASIC_AUTH_PASSWORD: "secret"
