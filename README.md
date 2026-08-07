@@ -69,6 +69,15 @@ docker compose up -d
 
 > **版本规范**：`v*` 开头的 tag 必须符合[语义化版本](https://semver.org/)（`vMAJOR.MINOR.PATCH`，可带 `-prerelease`/`+build`，如 `v1.2.3`、`v2.0.0-rc.1`），推送到 Docker Hub 与 GHCR 的镜像 tag 即该版本号。
 
+推荐用 `bin/release` 发版（自动更新 CHANGELOG → 打 tag → 推送触发 CI）：
+
+```sh
+bin/release          # 自动递增 MINOR（如 v0.2.0 → v0.3.0）
+bin/release v0.5.0   # 自定义版本号（语义化版本，可带 -prerelease/+build）
+bin/release --dry-run  # 只打印将要执行的动作，不实际修改
+bin/release --no-push  # 更新 CHANGELOG + 打 tag，但不推送（手动推）
+```
+
 - Docker Hub：`<DOCKERHUB_USERNAME>/hotify-bark-server`
 - GHCR：`ghcr.io/<GitHub 账号>/hotify-bark-server`
 

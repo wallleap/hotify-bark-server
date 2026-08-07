@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# 发布新版本: 自动递增 MINOR 版本号，或使用自定义版本号。
+# 更新 CHANGELOG -> 提交 -> 打 tag -> 推送(触发 CI 构建镜像)。
+#
+# 用法:
+#   bin/release             # 自动递增 MINOR (如 v0.2.0 -> v0.3.0)
+#   bin/release v0.5.0      # 指定版本号 (语义化版本 vMAJOR.MINOR.PATCH，可带 -prerelease/+build)
+#   bin/release --no-push   # 更新 CHANGELOG + 打 tag，但不推送
+#   bin/release --dry-run   # 只打印将要执行的动作，不做任何修改
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+PUSH=1
+DRY_RUN=0
+VERSION=""
+for arg in "$@"; do
+  case "$arg" in
+    --no-push) PUSH=0 ;;
+    --dry-run) DRY_RUN=1 ;;
+    -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
+    -*) echo "==> 未知参数: $arg (支持 --no-push / --dry-run / -h)" >&2; exit 1 ;;
+    *) VERSION="$arg" ;;
+  esac
+done
+
+if ! command -v git-chglog >/dev/null 2>&1; then
+  echo "==> git-chglog 未安装，请先执行:" >&2
+  echo "    GOPROXY=https://goproxy.cn,direct go install github.com/git-chglog/git-chglog/cmd/git-chglog@latest" >&2
+  exit 1
+fi
+
+# 找最新的稳定 v0.x tag 作为上一个版本（跳过 -prerelease，避免递增基准错乱）
+LAST_TAG="$(git tag --list 'v0.*' --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)"
+if [ -z "$LAST_TAG" ]; then
+  echo "==> 未找到 v0.* tag，将从 v0.1.0 开始" >&2
+  LAST_TAG="v0.0.0"
+fi
+
+if [ -n "$VERSION" ]; then
+  # 自定义版本号，严格校验语义化版本
+  if ! echo "$VERSION" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
+    echo "==> 非法版本号: $VERSION (需 vMAJOR.MINOR.PATCH，可带 -prerelease/+build)" >&2
+    exit 1
+  fi
+  NEW_TAG="$VERSION"
+else
+  # 自动递增 MINOR，PATCH 归零
+  MAJOR="$(echo "$LAST_TAG" | cut -d. -f1)"
+  MINOR="$(echo "$LAST_TAG" | cut -d. -f2)"
+  NEW_TAG="${MAJOR}.$((MINOR + 1)).0"
+fi
+
+if git rev-parse -q --verify "refs/tags/$NEW_TAG" >/dev/null 2>&1; then
+  echo "==> tag 已存在: $NEW_TAG" >&2
+  exit 1
+fi
+
+BRANCH="$(git branch --show-current)"
+echo "==> 发布版本: $NEW_TAG (上一个是 $LAST_TAG, 分支 $BRANCH)"
+
+if [ "$DRY_RUN" = "1" ]; then
+  echo "==> [dry-run] 将执行: git-chglog --next-tag $NEW_TAG -> commit CHANGELOG -> git tag -a $NEW_TAG -> 推送 $NEW_TAG"
+  exit 0
+fi
+
+# 1) 更新 CHANGELOG（git-chglog 以 --next-tag 生成未发布版本段）
+git-chglog --next-tag "$NEW_TAG" "v0.1.0.." -o CHANGELOG.md
+git add CHANGELOG.md
+if git diff --cached --quiet; then
+  echo "==> CHANGELOG 无变化，跳过提交"
+else
+  git commit -q -m "docs: update CHANGELOG for $NEW_TAG"
+  echo "==> CHANGELOG 已提交"
+fi
+
+# 2) 打 annotated tag
+git tag -a "$NEW_TAG" -m "$NEW_TAG"
+echo "==> 已创建 tag: $NEW_TAG"
+
+# 3) 推送
+if [ "$PUSH" = "1" ]; then
+  git push origin "$BRANCH"
+  git push origin "$NEW_TAG"
+  echo "==> 已推送 $BRANCH 与 $NEW_TAG，CI 将构建镜像: https://github.com/wallleap/hotify-bark-server/actions"
+else
+  echo "==> 未推送（--no-push），手动推送: git push origin $NEW_TAG"
+fi
