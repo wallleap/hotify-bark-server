@@ -141,8 +141,21 @@
 ### 5.7 请求日志未脱敏 `devicetoken` query
 `router.go` 的 `redactingWriter` 只掩码 `?token=`；`/register?devicetoken=...` 里的设备令牌仍以明文进日志（与 AGENTS 记录的「其它 query 保持原样」一致）。属已知权衡；如需更严格可一并掩码 `devicetoken`/`device_key`。
 
+> **分析（2026-08）**：Fiber logger `${url}` 标签映射 `c.OriginalURL()`（含 query string，见 `logger/tags.go` 的 `TagURL`），而 `redactingWriter`（`router.go:74`）的 `tokenParamRe` 仅匹配 `([?&]token=)[^&\s]*`。故 `route_register.go` 的旧版 GET 注册 `GET /register?devicetoken=<APNs token>&key=<device_key>` 会把**持久凭证**（device_token / device_key，与 client token 同级敏感）明文写入访问日志，而日志常被采集到集中存储/第三方，泄露面大于进程内。
+>
+> **触发面窄**：仅旧版 **GET** `/register?devicetoken=` 走 query；新版 POST `/register` 用 JSON body（body 不记录，已防护），因此只有老客户端注册会中招。
+>
+> **结论**：低必要性、低成本的加固。倾向把 `tokenParamRe` 扩展为一组 `(?i)` query 参数（`token|devicetoken|device_token|device_key|key`）一次覆盖；或保守只加 `devicetoken`、不碰 `key`；亦可维持现状并在文档记录为已知权衡。**尚未实施。**
+
 ### 5.8 多副本一致性（无锁/无共享态）
 默认 bbolt 单文件 + 进程内 WebSocket hub 均**无跨副本一致性**；多实例部署时注册与 /stream 会分片。叠加 5.1 的无 PVC，多副本可靠性低，只适合单副本或 MySQL 场景。
+
+> **分析（2026-08）**：确认现状仍成立，且 5.1 的 Helm PVC 落地后问题边界更清晰：
+> - **bbolt（默认）**：`store.go` 用 `bolt.Open(path, 0600, ...)`（单进程独占文件锁）。即使挂共享 PVC（RWO 本就只允许单节点读写），bbolt 也**不支持多进程并发写**，多副本必然冲突。因此默认栈**只能单副本**。
+> - **进程内 hub**：`hub.go` 的订阅表（`map[uint64]chan Message`）纯进程内存，/stream 扇出不跨副本；即使换 MySQL，`/stream` 仍按副本各自为政，某副本重启即断该副本的连接。
+> - **MySQL 模式**：注册数据落 MySQL 可多副本共享，但 gotify 监控（`/stream` WEB 订阅、`gotify.db`）与推送链路仍进程内状态。
+>
+> **结论**：属架构级约束，非小改动可消解。多副本只适用于 MySQL 模式且接受 `/stream` 各副本独立（需上游负载均衡时自行固定副本）；默认 bbolt 明确**单副本**。多副本高可用需引入共享缓存/消息总线（Redis pub/sub → DB 推送），涉及范围大，列 P3。**尚未实施，文档约束已明确。**
 
 ## 结论（优先级建议）
 
