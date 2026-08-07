@@ -99,5 +99,5 @@ curl -X DELETE -H "X-Gotify-Key: <clientToken>" "http://<host>:18080/message"  #
 
 - **iOS 收不到推送**：确认 `device_key` 与注册时一致、`device_token` 已注册成功（`/register` 返回 200）；推送接口返回 410/`BadDeviceToken` 说明 token 失效需重新注册。
 - **桥连不上 `/message`、`/stream`（401）**：`gotify_token` 与 `BARK_SERVER_GOTIFY_CLIENT_TOKEN` 不一致，或用了自动生成 token 但服务重启过（重启后自动 token 不变，若删过 `gotify.db` 才变）。
-- **找不到自动生成的 client token**：预置一个（推荐），或停服删除 `<data>/gotify.db` 重新生成（会同时清空监控历史）。
+- **找不到自动生成的 client token**：Docker 部署可在**首次启动**时用 `docker logs -f hotify-bark-server` 看到（该行仅打印一次）；或预置一个（推荐）；或停服删除 `<data>/gotify.db` 重新生成（会同时清空监控历史）。
 - **`/messageevil` 之类路径被拒绝（418）**：属正常——Basic Auth 白名单只放行精确路径 `/message` 及其子路径。
