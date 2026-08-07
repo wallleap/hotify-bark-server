@@ -128,6 +128,8 @@ systemctl enable --now hotify-bark-server
 | `--rate-limit-ip` / `BARK_SERVER_RATE_LIMIT_IP` | 按来源 IP 对 `/register` `/mcp*` 限流（请求/秒），默认 `0` 关闭 |
 | `--rate-limit-burst` / `BARK_SERVER_RATE_LIMIT_BURST` | IP 限流突发窗口 token 数，默认等于 `rate-limit-ip` |
 | `--rate-limit-push` / `BARK_SERVER_RATE_LIMIT_PUSH` | 额外把限流应用到推送端点 `/push` 与 `/:device_key`（默认关闭，推送默认不限流） |
+| `--log-level` / `BARK_SERVER_LOG_LEVEL` | 日志级别 `debug|info|warn|error`，默认 `info` |
+| `--log-format` / `BARK_SERVER_LOG_FORMAT` | 日志格式 `console|json`，默认 `console` |
 | `--unix-socket`、`--url-prefix`、`--cert`/`--key` | 监听方式 / 前缀 / TLS |
 
 完整参数见 `./hotify-bark-server --help`。

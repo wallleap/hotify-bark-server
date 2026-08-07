@@ -60,7 +60,9 @@
 ⬜ 未实现。当前仅 urfave/cli 参数 + 环境变量（`main.go` getAppFlags）。
 
 ### 2.2 Prometheus / JSON 日志 / 分级
-⬜ 未实现。日志用 `mritd/logger`（`logger.Infof` 等扩散在 `main.go`、`router.go`），非结构化 JSON；无 Prometheus 指标端点。
+✅ 已实现：
+- **分级与 JSON 日志**：新增 `--log-level`（`debug|info|warn|error`）与 `--log-format`（`console|json`），接入底层 `mritd/logger`（zap）原生能力；解析逻辑独立成 `internal/logging/` 可单测。
+- **Prometheus 指标**：新增 `internal/metrics/`（`GET /metrics`），基于 `prometheus/client_golang`，统计 HTTP 请求（method×status 分类）、活跃 `/stream` WebSocket 连接数、Go/进程运行时指标。请求计数经 fiber 中间件全量埋点。
 
 ### 2.3 深度健康检查 / 备份 / 迁移
 🟡 部分实现：`/healthz`（`route_misc.go:28`）仅返回字符串，无 DB/APNs/Gotify 深度检测；`/ping`、`/info`、`/version` 已有。
@@ -165,7 +167,7 @@
 | P0 | Docker 镜像非 root、数据目录收紧 | 容器安全基线 | ✅ 已落地（`app` 非 root + `/data` chown） |
 | P0 | Helm PVC 持久化 + MySQL 凭据走 secret（5.1/5.2） | K8s 数据不丢、避免明文密钥 | ✅ 已落地 |
 | P1 | 单 Device 推送频率限制 + 拉黑/禁用接口 | 泄露止损 |
-| P1 | 结构化 JSON 日志 / Prometheus 指标 | 可观测性 |
+| P1 | 结构化 JSON 日志 / Prometheus 指标 | 可观测性 | ✅ 已落地（`--log-level`/`--log-format` + `/metrics`） |
 | P1 | Gotify 消息上限可配置；统一环境变量命名（5.3/5.5） | 运维一致性 | ✅ 5.3（`--gotify-max-messages`）与 5.5（README 补齐实际 EnvVar）均已解决 |
 | P2 | 消息按时间清理、订阅者上限 | 资源控制 |
 | P2 | APNs 连接池健康检测、批量异步削峰 | 性能 |
