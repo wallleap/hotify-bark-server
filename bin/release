@@ -31,10 +31,12 @@ if ! command -v git-chglog >/dev/null 2>&1; then
   exit 1
 fi
 
-# 找最新的稳定 v0.x tag 作为上一个版本（跳过 -prerelease，避免递增基准错乱）
-LAST_TAG="$(git tag --list 'v0.*' --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)"
+# 找最近发布的稳定 vX.Y.Z tag 作为递增基准。
+# 按创建时间（tagger date）而非版本号取最近一个，这样能跨 MAJOR 递增：
+# 发完 v1.0.0 后无参调用自动变成 v1.1.0（跳过 -prerelease，避免递增基准错乱）。
+LAST_TAG="$(git for-each-ref --sort=-creatordate --format='%(refname:strip=2)' refs/tags | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)"
 if [ -z "$LAST_TAG" ]; then
-  echo "==> 未找到 v0.* tag，将从 v0.1.0 开始" >&2
+  echo "==> 未找到 v* tag，将从 v0.1.0 开始" >&2
   LAST_TAG="v0.0.0"
 fi
 

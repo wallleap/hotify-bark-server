@@ -72,7 +72,7 @@ docker compose up -d
 推荐用 `bin/release` 发版（自动更新 CHANGELOG → 打 tag → 推送触发 CI）：
 
 ```sh
-bin/release          # 自动递增 MINOR（如 v0.2.0 → v0.3.0）
+bin/release          # 自动递增 MINOR（如 v0.2.0 → v0.3.0，基于最近发布的 tag，可跨 MAJOR）
 bin/release v0.5.0   # 自定义版本号（语义化版本，可带 -prerelease/+build）
 bin/release --dry-run  # 只打印将要执行的动作，不实际修改
 bin/release --no-push  # 更新 CHANGELOG + 打 tag，但不推送（手动推）
