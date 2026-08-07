@@ -14,10 +14,11 @@ BUILD_DATE="$(date '+%F %T')"
 COMMIT_ID="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
 
 mkdir -p dist
+echo "==> 构建 $GOOS/$GOARCH -> $OUT (version=${VERSION}) ..."
 CGO_ENABLED=0 go build -trimpath -o "$OUT" \
     -ldflags "-w -s \
         -X 'main.version=${VERSION}' \
         -X 'main.buildDate=${BUILD_DATE}' \
         -X 'main.commitID=${COMMIT_ID}'" .
 
-echo "built: $OUT ($GOOS/$GOARCH, version=${VERSION})"
+echo "==> 构建完成: $OUT ($GOOS/$GOARCH, version=${VERSION})"
