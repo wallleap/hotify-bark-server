@@ -16,7 +16,9 @@ the V2 version.**
         + [java](#java)
         + [nodejs](#nodejs)
         + [php](#php)
-    * [参数说明与优先级](#参数说明与优先级)
+    + [参数说明与优先级](#参数说明与优先级)
+        + [V1 兼容推送（URL 路径参数）](#v1-兼容推送url-路径参数)
+        + [MCP 工具参数](#mcp-工具参数)
     * [响应格式](#响应格式)
     * [认证](#认证)
     * [新增接口（本 fork）](#新增接口本-fork)
@@ -24,6 +26,7 @@ the V2 version.**
         + [Ping](#ping)
         + [Healthz](#healthz)
         + [Info](#info)
+        + [Metrics](#metrics)
 
 ## Push
 
@@ -43,8 +46,10 @@ the V2 version.**
 | copy (optional) | string |  The value to be copied |
 | sound (optional) | string | Value from [here](https://github.com/Finb/Bark/tree/master/Sounds)， and custom ringtones are also available |
 | icon (optional) | string | An url to the icon, available only on iOS 15 or later |
+| image (optional) | string | An url to the image, available only on iOS 15 or later |
 | group (optional) | string | The group of the notification |
 | ciphertext (optional) | string | The ciphertext of encrypted push notifications |
+| markdown (optional) | string | Markdown 内容，覆盖 `body`（Body 留空可只用 markdown） |
 | isArchive (optional) | string | Value must be `1`. Whether or not should be archived by the app |
 | ttl (optional) | integer | Time to live for archived messages, in seconds. Expired archived messages are deleted automatically |
 | url (optional) | string | Url that will jump when click notification |
@@ -309,6 +314,22 @@ echo $response;
 - 除上表字段外，其余字段会原样透传为 APNs 自定义字段（`payload.custom`），key 转小写。
 - 3 个取值来源按优先级覆盖（低→高）：**请求体（body） → URL 查询参数（query） → URL 路径**。
 
+### V1 兼容推送（URL 路径参数）
+
+老式 Bark 客户端走路径参数，参数通过 URL 路径段传入，段顺序固定：
+`/:device_key`、`/:device_key/:body`、`/:device_key/:title/:body`、`/:device_key/:title/:subtitle/:body`
+（GET / POST 均支持）。路径中的 `title`/`subtitle`/`body` 会 `QueryUnescape` 解码。
+
+```sh
+# 经典 Bark URL 形态：GET /:device_key/:title/:body
+curl "http://127.0.0.1:18080/ynJ5Ft4atkMkWeo2PAvFhF/%E6%A0%87%E9%A2%98/%E6%AD%A3%E6%96%87"
+```
+
+### MCP 工具参数
+
+`/mcp` 与 `/mcp/:device_key` 暴露一个名为 `notify` 的 MCP 工具，函数参数与 Push 字段一致：
+`title`/`subtitle`/`body`/`markdown`/`level`/`volume`/`badge`/`call`/`sound`/`icon`/`image`/`group`/`isArchive`/`ttl`/`url`/`copy`，其中 `/mcp` 需要工具参数里的 `device_key`，`/mcp/:device_key` 不用（从路径预填）。详情见 [MCP.md](MCP.md)。
+
 ## 响应格式
 
 所有接口统一返回 `CommonResp`：
@@ -325,9 +346,52 @@ echo $response;
 
 ## 认证
 
+本服务两套并存（互不冲突，可同时开启）：
+
+### 客户端 token（Gotify 兼容接口）
+
+`/message`、`/stream`（及设备级变体）用客户端 token 鉴权，未带或错误时返回 `401`。三种携带方式按优先级从高到低：
+
+1. query 参数：`?token=<clientToken>`
+2. 请求头：`X-Gotify-Key: <clientToken>`
+3. 请求头：`Authorization: Bearer <clientToken>`
+
+```sh
+curl "http://127.0.0.1:18080/message?token=<clientToken>"
+curl -H "X-Gotify-Key: <clientToken>" "http://127.0.0.1:18080/message"
+curl -H "Authorization: Bearer <clientToken>" "http://127.0.0.1:18080/message"
+```
+
+同时携带时按上述顺序取第一个非空值。token 生成方式见 [TOKENS.md](TOKENS.md)。
+
+### Basic Auth（全局防护）
+
 - `/push`、`/:device_key`（V1 兼容推送）、`/mcp*` **默认无独立认证**——`device_key` 本身就是凭证，需保证其私密性。
-- 启用 Basic Auth（`--user` / `--password` 或 `BARK_SERVER_BASIC_AUTH_USER/PASSWORD`）后，受保护子路径需携带 Basic Auth 头；白名单放行路径见 [README](../README.md)。
-- 推送请求中可通过 query 传递参数，Basic Auth 开启时建议在 `Authorization` 头中携带凭证。
+- 启用 Basic Auth（`--user` / `--password` 或 `BARK_SERVER_BASIC_AUTH_USER/PASSWORD`）后，**非白名单** 路径必须携带 `Authorization: Basic base64(user:password)`，否则返回 `418`。
+
+**白名单路径**（Basic Auth 豁免，仍走各自原有认证）：
+
+| 分类 | 路径 |
+|---|---|
+| 全局 | `/ping`、`/register`、`/healthz`、`/version`、`/info`、`/message`、`/stream` |
+| 设备级 | `/:device_key/version`、`/:device_key/message`、`/:device_key/message/:id`（DELETE）、`/:device_key/stream` |
+
+其中 `/message`、`/stream` 及设备级变体仍需客户端 token 鉴权（见上）；`/info` 无凭据返回基础信息、带有效 Basic Auth 才返回设备数。根路径 `/` 因 BasicAuth 中间件挂载于 `Use("/+")`（不匹配零段根路径），无凭据亦返回 `"ok"`。
+
+**非白名单路径**（Basic Auth 开启时必须携带凭据）：`/push`、`/:device_key`（V1 兼容推送）、`/:device_key/:body` 等路径形态、`/mcp*`、`/metrics`。
+- 建议在 `Authorization` 头中携带，避免 query 明文泄露；推送参数仍可经 query 传递。
+
+```sh
+# user: password -> base64 -> 头值
+curl -u admin:secret "http://127.0.0.1:18080/info"
+curl -H "Authorization: Basic YWRtaW46c2VjcmV0" "http://127.0.0.1:18080/info"
+```
+
+### 两者的优先级/关系
+
+- **Basic Auth 是包级的"能否进入"门禁**（按路径白名单放行，`/message`、`/stream`、`/info` 等豁免）；**客户端 token 是接口内的"你是谁"鉴权**（放行后才校验 token）。
+- 同一请求可同时带两种头：`Authorization: Basic <...>` 通过 Basic Auth 门禁，`Authorization: Bearer <...>` 或 query 提供客户端 token——两者互不覆盖。
+- Basic Auth 白名单见 [README](../README.md)。
 
 ## 新增接口（本 fork 新增）
 
@@ -336,16 +400,19 @@ echo $response;
 | Method | Path | 认证 | 说明 |
 |---|---|---|---|
 | GET | `/` | 无 | 存活探测，返回 `"ok"` |
-| POST | `/register` | 无 | 设备注册（body），返回 `device_key`。详见 [TUTORIAL.md](TUTORIAL.md) |
-| GET | `/register` | 无 | 设备注册（兼容旧 query 参数） |
+| POST | `/register` | 无 | 设备注册（body：`device_key`(可选)/`device_token`），返回 `device_key`。详见 [TUTORIAL.md](TUTORIAL.md) |
+| GET | `/register` | 无 | 设备注册（兼容旧 query 参数：`key`/`devicetoken`） |
 | GET | `/register/:device_key` | 无 | 校验 device_key 是否存在 |
 | GET | `/version` | 无 | Gotify 兼容探测，返回 `{"version":...}` |
-| GET | `/message` | 客户端 token | Gotify 兼容历史消息查询 |
+| GET | `/message` | 客户端 token | Gotify 兼容历史消息查询，参数 `limit`(默认100/上限200)、`since`(id < since) |
 | DELETE | `/message` / `/message/:id` | 客户端 token | Gotify 兼容删除历史 |
 | GET | `/stream` | 客户端 token | Gotify 兼容 WebSocket 订阅 |
-| GET/POST | `/mcp` / `/mcp/:device_key` | 无 | MCP 接口，供 AI 代理直接推送 |
+| GET/DELETE | `/:device_key/message`、`/:device_key/message/:id` | 客户端 token | 单设备历史查询/删除，参数同全局 |
+| GET | `/:device_key/stream` | 客户端 token | 单设备实时订阅 |
+| GET | `/:device_key/version` | 无 | 单设备探测 |
+| ALL | `/mcp` / `/mcp/:device_key` | 无 | MCP 接口（streamable HTTP），供 AI 代理调用 `notify` 推送 |
 
-Gotify 兼容与 MCP 接口的详细说明见 [GOTIFY_COMPAT.md](GOTIFY_COMPAT.md) 与 [MCP.md](MCP.md)。
+Gotify 兼容与 MCP 接口的详细参数与示例见 [GOTIFY_COMPAT.md](GOTIFY_COMPAT.md) 与 [MCP.md](MCP.md)。
 
 ## Misc
 
@@ -355,14 +422,39 @@ Gotify 兼容与 MCP 接口的详细说明见 [GOTIFY_COMPAT.md](GOTIFY_COMPAT.m
 curl "http://127.0.0.1:18080/ping"
 ```
 
+响应：`{"code":200,"message":"pong","timestamp":...}`
+
 ### Healthz
 
 ```sh
 curl "http://127.0.0.1:18080/healthz"
 ```
 
+响应：`"ok"`（纯文本）。与 `/ping` 功能等价，供健康检查使用。
+
 ### Info
+
+返回服务版本/构建信息：
 
 ```sh
 curl "http://127.0.0.1:18080/info"
 ```
+
+```json
+{"version":"v0.4.0","build":"...","arch":"linux/amd64","commit":"..."}
+```
+
+- 字段：`version`（程序版本）、`build`（构建日期）、`arch`（系统/架构）、`commit`（提交号）。
+- `/info` 在 Basic Auth 白名单内可直接访问；**带有效 Basic Auth 凭据**时额外返回 `devices`（当前设备总数），匿名请求不含该字段。
+
+### Metrics
+
+Prometheus 指标端点（免 Basic Auth 时需要显式放行；开启 Basic Auth 后非白名单路径会 418，见 [README](../README.md) 白名单说明）：
+
+```sh
+curl "http://127.0.0.1:18080/metrics"
+```
+
+- `hotify_bark_http_requests_total{method,status}`：HTTP 请求计数（status 为粗粒度分类 `2xx/4xx/5xx` 等）。
+- `hotify_bark_active_streams`：当前活跃的 `/stream` WebSocket 连接数。
+- 标准 Go/进程收集器（`go_*`、`process_*`）。

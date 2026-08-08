@@ -161,7 +161,7 @@ systemctl enable --now hotify-bark-server
 
 > **默认无鉴权**：未配置 Basic Auth 时，`/push`、`/register`、`/mcp*` 与 `/:device_key` 对全网开放（启动日志会给出醒目警告）。**公网部署务必**：
 
-1. 开启 Basic Auth：`BARK_SERVER_BASIC_AUTH_USER` / `BARK_SERVER_BASIC_AUTH_PASSWORD`（`/push`、`/register`、`/mcp*`、`/:device_key` 均受保护；白名单路径 `/ping /healthz /version /info /message /stream` 仍开放——其中 `/message` `/stream` 走 gotify token 鉴权，`/info` 无凭据返回基础信息、带有效 Basic Auth 才返回设备数）。
+1. 开启 Basic Auth：`BARK_SERVER_BASIC_AUTH_USER` / `BARK_SERVER_BASIC_AUTH_PASSWORD`（`/push`、`/mcp*`、`/:device_key` 受保护；白名单路径 `/ping /register /healthz /version /info /message /stream` 仍开放——其中 `/message` `/stream` 走 gotify token 鉴权，`/info` 无凭据返回基础信息、带有效 Basic Auth 才返回设备数）。
 2. 配置限流：`BARK_SERVER_RATE_LIMIT_IP=10`（每秒每 IP 最多 10 次）可缓解 CC / 刷注册。推送端点 `/push`、`/:device_key` 默认不限流（避免误伤正常推送），确需限制时再加 `BARK_SERVER_RATE_LIMIT_PUSH=true`。
 3. 建议前置 **HTTPS 反向代理**（如 Caddy / Nginx），并限制其仅转发到 `:8080`。
 4. 数据目录 `/data` 收紧为服务运行用户可读写。
