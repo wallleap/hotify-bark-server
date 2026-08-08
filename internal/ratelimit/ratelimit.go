@@ -20,17 +20,31 @@ type Limiter struct {
 	// lastRefill holds the last token refill time per key.
 	lastRefill map[string]time.Time
 	now        func() time.Time
+
+	// maxKeys caps the number of tracked keys; when exceeded, keys idle for
+	// longer than idleTTL are evicted so a flood of distinct keys (e.g. many
+	// client IPs on a public server) cannot grow the map without bound.
+	maxKeys int
+	// idleTTL is how long a key may go unused before it becomes evictable.
+	idleTTL time.Duration
 }
+
+const (
+	defaultMaxKeys = 10000
+	defaultIdleTTL = 15 * time.Minute
+)
 
 // New creates a Limiter. capacity is the burst; refillPerSec is the steady
 // refill rate. capacity=0 denies everything; refillPerSec<=0 gives burst only.
 func New(capacity, refillPerSec float64) *Limiter {
 	return &Limiter{
-		capacity:    capacity,
+		capacity:     capacity,
 		refillPerSec: refillPerSec,
-		buckets:     make(map[string]float64),
-		lastRefill:  make(map[string]time.Time),
-		now:         time.Now,
+		buckets:      make(map[string]float64),
+		lastRefill:   make(map[string]time.Time),
+		now:          time.Now,
+		maxKeys:      defaultMaxKeys,
+		idleTTL:      defaultIdleTTL,
 	}
 }
 
@@ -44,6 +58,7 @@ func (l *Limiter) Allow(key string) bool {
 	}
 
 	now := l.now()
+	l.evictIdle(now)
 	tokens, ok := l.buckets[key]
 	if !ok {
 		tokens = l.capacity
@@ -68,6 +83,22 @@ func (l *Limiter) Allow(key string) bool {
 		return true
 	}
 	return false
+}
+
+// evictIdle drops tracked keys that were unused for longer than idleTTL, but
+// only once the map has reached maxKeys — the common small deployment never
+// pays the sweep cost. Idle keys are the ones whose persisted tokens are full
+// anyway, so evicting them loses no burst capacity.
+func (l *Limiter) evictIdle(now time.Time) {
+	if len(l.buckets) < l.maxKeys {
+		return
+	}
+	for key, last := range l.lastRefill {
+		if now.Sub(last) > l.idleTTL {
+			delete(l.buckets, key)
+			delete(l.lastRefill, key)
+		}
+	}
 }
 
 // ShouldLimit reports whether a request from key should be rejected as

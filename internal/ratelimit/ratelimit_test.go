@@ -126,3 +126,46 @@ func TestShouldLimitExceedsBurst(t *testing.T) {
 		t.Fatal("request beyond burst must be limited")
 	}
 }
+
+// TestEvictIdleBoundsMemory guards the public-server memory bound: when the
+// key count reaches maxKeys, keys idle longer than idleTTL are dropped so a
+// flood of distinct keys cannot grow the map without limit.
+func TestEvictIdleBoundsMemory(t *testing.T) {
+	l := New(5, 1)
+	base := time.Unix(1_000_000, 0)
+	l.now = func() time.Time { return base }
+
+	l.maxKeys = 3
+	l.idleTTL = time.Minute
+
+	// Fill three keys; none idle yet.
+	for _, k := range []string{"a", "b", "c"} {
+		if !l.Allow(k) {
+			t.Fatalf("key %s within burst should be allowed", k)
+		}
+	}
+	if len(l.buckets) != 3 {
+		t.Fatalf("want 3 tracked keys, got %d", len(l.buckets))
+	}
+
+	// Age only key "a" past the TTL, keep "b" fresh, then add a 4th key:
+	// the eviction must reclaim the idle slot instead of growing past maxKeys.
+	l.lastRefill["a"] = base.Add(-2 * time.Minute)
+	l.lastRefill["b"] = base.Add(-30 * time.Second)
+	l.now = func() time.Time { return base.Add(time.Minute) }
+	if !l.Allow("d") {
+		t.Fatal("adding a 4th key should trigger eviction, not be blocked")
+	}
+	if len(l.buckets) > 3 {
+		t.Fatalf("tracked keys must stay capped at maxKeys, got %d", len(l.buckets))
+	}
+	if _, ok := l.buckets["a"]; ok {
+		t.Fatal("idle key a should have been evicted")
+	}
+	if _, ok := l.buckets["b"]; ok {
+		t.Fatal("key b also exceeds the TTL after the minute advance and must be evicted")
+	}
+	if _, ok := l.buckets["d"]; !ok {
+		t.Fatal("new key d must be tracked")
+	}
+}
