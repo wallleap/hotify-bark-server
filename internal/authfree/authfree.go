@@ -10,8 +10,8 @@ import (
 
 // Routers are paths exempt from Basic Auth; they carry their own
 // authentication (gotify token on /message & /stream, none needed on the
-// probe endpoints).
-var Routers = []string{"/ping", "/register", "/healthz", "/version", "/message", "/stream"}
+// probe endpoints, /info is public but gated to add data when authed).
+var Routers = []string{"/ping", "/register", "/healthz", "/version", "/message", "/stream", "/info"}
 
 // Suffixes are single device-key-scoped path suffixes exempt from Basic Auth,
 // matching /:device_key/<suffix> or /:device_key/message/:id. They carry the

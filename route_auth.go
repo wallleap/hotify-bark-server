@@ -13,6 +13,11 @@ import (
 // (e.g. the device count on GET /info).
 var basicAuthEnabled bool
 
+// ctxUsername is the Locals key the BasicAuth middleware records the
+// authenticated username under, on success only. /info uses it to decide
+// whether the request presented valid credentials.
+const ctxUsername = "username"
+
 // isAuthFreePath reports whether p is (or is under) a Basic-Auth whitelisted
 // path. Logic lives in internal/authfree so it is unit-testable without the
 // package-main deviceToken gate; this wrapper keeps the call site stable.
@@ -33,8 +38,9 @@ func routerAuth(user, passwd string, router fiber.Router, urlPrefix string) {
 
 	logger.Info("Hotify-Bark Server Has Basic Auth Enabled.")
 	basicAuth := fiberbasicauth.New(fiberbasicauth.Config{
-		Users: map[string]string{user: passwd},
-		Realm: "Coffee Time",
+		Users:           map[string]string{user: passwd},
+		Realm:           "Coffee Time",
+		ContextUsername: ctxUsername,
 		Unauthorized: func(c *fiber.Ctx) error {
 			if isAuthFreePath(urlPrefix, c.Path()) {
 				return c.Next()

@@ -14,11 +14,16 @@ func TestIsAuthFreePath(t *testing.T) {
 		{name: "register exact", urlPrefix: "/", p: "/register", want: true},
 		{name: "message exact", urlPrefix: "/", p: "/message", want: true},
 		{name: "stream exact", urlPrefix: "/", p: "/stream", want: true},
+		{name: "version exact", urlPrefix: "/", p: "/version", want: true},
+		{name: "info exact", urlPrefix: "/", p: "/info", want: true},
+		{name: "info any-case-exact", urlPrefix: "/", p: "/info", want: true},
 		// Global subpaths.
 		{name: "message subpath", urlPrefix: "/", p: "/message/12", want: true},
 		// Lookalike must NOT match (bare-prefix safety).
 		{name: "messageevil rejected", urlPrefix: "/", p: "/messageevil", want: false},
 		{name: "registerevil rejected", urlPrefix: "/", p: "/registerevil", want: false},
+		{name: "infoevil rejected", urlPrefix: "/", p: "/infoevil", want: false},
+		{name: "info subpath", urlPrefix: "/", p: "/info/extra", want: true},
 		// Unrelated paths.
 		{name: "push rejected", urlPrefix: "/", p: "/push", want: false},
 		{name: "device push rejected", urlPrefix: "/", p: "/dev/body", want: false},

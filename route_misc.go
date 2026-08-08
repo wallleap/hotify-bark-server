@@ -45,9 +45,11 @@ func init() {
 				"arch":    runtime.GOOS + "/" + runtime.GOARCH,
 				"commit":  commitID,
 			}
-			// Device count is sensitive (leaks deployment scale); only report it
-			// when Basic Auth is enabled, which also protects /info behind it.
-			if basicAuthEnabled {
+			// Device count is sensitive (leaks deployment scale). /info is
+			// Basic-Auth-free so probes work, but the device count is only
+			// added when this exact request presented valid Basic Auth
+			// credentials (basicauth records the username on success).
+			if basicAuthEnabled && c.Locals(ctxUsername) != nil {
 				devices, _ := db.CountAll()
 				resp["devices"] = devices
 			}
