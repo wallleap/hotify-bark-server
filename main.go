@@ -154,8 +154,12 @@ func customErrorHandler(c *fiber.Ctx, err error) error {
 // authentication and routes
 func setupRouter(c *cli.Context, fiberApp *fiber.App) {
 	fiberRouter := fiberApp.Group(c.String("url-prefix"))
+	// Mount the access-log/recover/metrics middleware before Basic Auth so
+	// that auth-rejected requests (which return before Next) are still logged
+	// and instrumented.
+	routerSetupCommon(fiberRouter)
 	routerAuth(c.String("user"), c.String("password"), fiberRouter, c.String("url-prefix"))
-	routerSetup(fiberRouter)
+	routerSetupRoutes(fiberRouter)
 }
 
 func initializeDatabase(c *cli.Context) {

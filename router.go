@@ -39,7 +39,11 @@ func (r routeSlice) Less(i, j int) bool { return r[i].Weight > r[j].Weight }
 
 func (r routeSlice) Swap(i, j int) { r[i], r[j] = r[j], r[i] }
 
-var routerOnce sync.Once
+// commonOnce guards the request-scoped middleware registration so that
+// routerSetupCommon applies it exactly once per process.
+var commonOnce sync.Once
+// routeOnce guards route registration.
+var routeOnce sync.Once
 var routes routeSlice
 
 // register new route with key name
@@ -86,8 +90,12 @@ func (r redactingWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func routerSetup(router fiber.Router) {
-	routerOnce.Do(func() {
+// routerSetupCommon installs the request-scoped middleware (access log,
+// recover, metrics). It must be registered before the Basic Auth middleware:
+// a rejected request returns early from the auth gate without calling Next, so
+// anything mounted after it (like the logger) would never see the request.
+func routerSetupCommon(router fiber.Router) {
+	commonOnce.Do(func() {
 		router.Use(fiberlogger.New(fiberlogger.Config{
 			// No ${body}: request payloads carry push content and credentials
 			// (device_token / device_key) and must not land in logs. Audit of
@@ -103,12 +111,26 @@ func routerSetup(router fiber.Router) {
 		if barkMetrics != nil {
 			router.Use(barkMetrics.Middleware())
 		}
+	})
+}
+
+// routerSetupRoutes registers the application routes. Split from the common
+// middleware so Basic Auth can sit between logging and the endpoints.
+func routerSetupRoutes(router fiber.Router) {
+	routeOnce.Do(func() {
 		sort.Sort(routes)
 		for _, r := range routes {
 			r.Func(router)
 			logger.Infof("load route [%s] success...", r.Name)
 		}
 	})
+}
+
+// routerSetup registers the request-scoped middleware and then the routes.
+// Kept for tests (NewServer) that build an app without Basic Auth.
+func routerSetup(router fiber.Router) {
+	routerSetupCommon(router)
+	routerSetupRoutes(router)
 }
 
 // for the fast return success result
