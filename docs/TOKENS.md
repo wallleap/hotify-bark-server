@@ -42,6 +42,6 @@
 
 补充说明（均属上游设计，非本 fork 引入）：
 
-- **MCP 接口与 push 等价**，以 device_key 为凭证，无独立认证。开启 Basic Auth（`--user`/`--password`）后 `/mcp`、`/push` 会被保护（白名单只放行 `/ping`、`/register`、`/healthz`、`/version`、`/message`、`/stream`）。
+- **MCP 接口与 push 等价**，以 device_key 为凭证，无独立认证。开启 Basic Auth（`--user`/`--password`）后 `/mcp`、`/push` 会被保护（白名单只放行 `/ping`、`/register`、`/healthz`、`/version`、`/message`、`/stream`、`/info`；其中 `/info` 无凭据返回基础信息，带有效 Basic Auth 才返回设备数）。
 - **Basic Auth 配置注意**：`--user` 有值而 `--password` 为空时，除白名单外所有请求都会被拒绝。
 - 服务端内置了 Bark App 的 APNs p8 私钥（`apns/apns_certs.go`），这是"服务端代发"架构——任何运行本服务端的人都能以 Bark App 名义发推送，请只在你信任的主机上部署。

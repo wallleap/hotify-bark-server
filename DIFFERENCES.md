@@ -10,7 +10,7 @@
 |---|---|---|
 | Gotify 兼容监控及其它消息相关接口 | `GET /version`、`GET /message`、`GET /stream`(WebSocket)，让 hotify-bridge 能像监测 Gotify 一样监测 bark | [GOTIFY_COMPAT.md](docs/GOTIFY_COMPAT.md) |
 | MCP 推送 | `POST /mcp`、`POST /mcp/:device_key`，AI 代理可通过 Model Context Protocol 直接发推送 | [MCP.md](docs/MCP.md) |
-| Basic Auth | 可选 `--user/--password`，`/ping` `/register` `/healthz` `/version` `/message` `/stream` 白名单 | |
+| Basic Auth | 可选 `--user/--password`，`/ping` `/register` `/healthz` `/version` `/info` `/message` `/stream` 白名单（`/info` 无凭据显示基础信息，带凭据才含设备数） | |
 | MySQL TLS | `--mysql-tls` 及配套 `mysql-ca`/`mysql-client-cert`/`mysql-client-key`/`mysql-tls-name`/`mysql-tls-skip-verify` | |
 | Gotify 客户端 token | `--gotify-client-token`，SHA-256 哈希持久化，自动生成并打印一次 | |
 | Gotify 消息上限 | `--gotify-max-messages`，配置监控消息保留条数（默认 `1000`） | |

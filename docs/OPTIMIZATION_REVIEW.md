@@ -132,7 +132,7 @@
 ✅ 已落地：新增 `--gotify-max-messages` / `BARK_SERVER_GOTIFY_MAX_MESSAGES`，`initGotifyCompat`（`main.go:66`）现已把该值传入 `gotifycompat.Config.MaxMessages`，默认 `0` 用内置 `1000`。
 
 ### 5.4 `/info` 暴露设备总数
-✅ 已解决：`/info` 仅在开启 Basic Auth 时返回 `devices`（该字段本就被 `routerAuth` 保护在鉴权后）；默认无鉴权时不返回设备总数，避免泄露部署规模。
+✅ 已解决：`/info` 加入 Basic Auth 白名单（无凭据可访问，返回版本/构建信息），设备总数仅当请求携带**有效 Basic Auth 凭据**时才返回，避免对匿名请求泄露部署规模。
 
 ### 5.5 环境变量命名不一致
 ✅ 已解决：核对后确认 `main.go` 实际 EnvVar 为 `--addr` → `BARK_SERVER_ADDRESS`、`--data` → `BARK_SERVER_DATA_DIR`，与其它 flag 的 EnvVar 风格一致（Flag 名 ≠ EnvVar 全对应，属正常）。原 review 声称「README/AGENTS 惯用 `BARK_SERVER_ADDR`」实不成立——仓库从未使用过该名。已按实据在 README 参数表补齐 `BARK_SERVER_ADDRESS` / `BARK_SERVER_DATA_DIR`，代码未动。
