@@ -1,5 +1,25 @@
 <a name="unreleased"></a>
 
+## [v0.4.0](https://github.com/wallleap/hotify-bark-server/compare/v0.3.0...v0.4.0)
+
+> 2026-08-08
+
+### Bug Fixes
+
+- **auth:** whitelist device-scoped DELETE /:device_key/message/:id from Basic Auth
+- **database:** reject empty MySQL device token like bbolt
+- **ratelimit:** evict idle keys to bound memory growth
+- **router:** log auth-rejected requests by mounting logger before Basic Auth
+
+### Documentation
+
+- **readme:** clarify Basic Auth request header for non-whitelisted paths
+
+### Features
+
+- **auth:** whitelist /info from Basic Auth, gate device count behind valid creds
+
+
 ## [v0.3.0](https://github.com/wallleap/hotify-bark-server/compare/v0.2.2...v0.3.0)
 
 > 2026-08-08
@@ -15,6 +35,7 @@
 
 ### Documentation
 
+- update CHANGELOG for v0.3.0
 - update Gotify/MCP interface descriptions and bridge device_key config
 - note that bridge monitors all messages (personal-deploy only)
 - correct bin/release usage description in AGENTS.md
