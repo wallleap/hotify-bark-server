@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"database/sql"
+	"fmt"
 	"os"
 	"strings"
 
@@ -107,7 +108,13 @@ func (d *MySQL) DeviceTokenByKey(key string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
+	// An empty token means the key is known but the device is no longer valid
+	// (e.g. wiped by BadDeviceToken cleanup). Report it as invalid like bbolt
+	// does, instead of returning "" with nil so the caller keeps pushing on
+	// a dead token.
+	if len(token) == 0 {
+		return "", fmt.Errorf("device token invalid")
+	}
 	return token, nil
 }
 
