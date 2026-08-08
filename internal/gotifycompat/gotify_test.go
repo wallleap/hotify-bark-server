@@ -626,11 +626,24 @@ func TestDeleteByDevice(t *testing.T) {
 		t.Fatal("message 3 belongs to d2, must not be deletable from d1 scope")
 	}
 
+	// single delete within d1's own scope must work
+	ok, err = svc.DeleteMessageByDevice("d1", 2)
+	if err != nil {
+		t.Fatalf("DeleteMessageByDevice(d1,2): %v", err)
+	}
+	if !ok {
+		t.Fatal("message 2 belongs to d1 and should be deletable")
+	}
+	d1, _ := svc.MessagesByDevice("d1", 100, 0)
+	if len(d1) != 1 || d1[0].ID != 1 {
+		t.Fatalf("d1 after single delete: want only id 1, got %+v", d1)
+	}
+
 	// bulk-delete d1
 	if err := svc.DeleteAllMessagesByDevice("d1"); err != nil {
 		t.Fatalf("DeleteAllMessagesByDevice(d1): %v", err)
 	}
-	d1, _ := svc.MessagesByDevice("d1", 100, 0)
+	d1, _ = svc.MessagesByDevice("d1", 100, 0)
 	if len(d1) != 0 {
 		t.Fatalf("d1 messages should be empty, got %d", len(d1))
 	}
@@ -693,5 +706,122 @@ func TestDeleteOnMemoryStore(t *testing.T) {
 	msgs, _ = svc.Messages(100, 0)
 	if len(msgs) != 0 {
 		t.Fatalf("want 0 after DeleteAll on memory store, got %d", len(msgs))
+	}
+}
+
+// TestDeleteByDeviceOnMemoryStore verifies the degraded in-memory store applies
+// the same device isolation as bbolt for single and bulk deletion.
+func TestDeleteByDeviceOnMemoryStore(t *testing.T) {
+	svc := buildMemoryFallbackService(t)
+	publishDevice(t, svc, "d1", 2) // ids 1,2
+	publishDevice(t, svc, "d2", 2) // ids 3,4
+
+	// deleting d2's id from d1's scope must report not-existed
+	ok, err := svc.DeleteMessageByDevice("d1", 3)
+	if err != nil {
+		t.Fatalf("DeleteMessageByDevice: %v", err)
+	}
+	if ok {
+		t.Fatal("message 3 belongs to d2, must not be deletable from d1 scope")
+	}
+
+	// single delete within d1's own scope must work
+	ok, err = svc.DeleteMessageByDevice("d1", 2)
+	if err != nil {
+		t.Fatalf("DeleteMessageByDevice(d1,2): %v", err)
+	}
+	if !ok {
+		t.Fatal("message 2 belongs to d1 and should be deletable")
+	}
+	d1, _ := svc.MessagesByDevice("d1", 100, 0)
+	if len(d1) != 1 || d1[0].ID != 1 {
+		t.Fatalf("d1 after single delete: want only id 1, got %+v", d1)
+	}
+
+	// bulk-delete d1, keep d2 intact
+	if err := svc.DeleteAllMessagesByDevice("d1"); err != nil {
+		t.Fatalf("DeleteAllMessagesByDevice(d1): %v", err)
+	}
+	d1, _ = svc.MessagesByDevice("d1", 100, 0)
+	if len(d1) != 0 {
+		t.Fatalf("d1 messages should be empty, got %d", len(d1))
+	}
+	d2, _ := svc.MessagesByDevice("d2", 100, 0)
+	if len(d2) != 2 {
+		t.Fatalf("d2 messages should be untouched (2), got %d", len(d2))
+	}
+}
+
+// TestTokenCompareEmpty guards the constant-time comparison shortcut: a zero
+// or empty digest must never validate.
+func TestTokenCompareEmpty(t *testing.T) {
+	if tokensEqual(nil, []byte{1, 2}) {
+		t.Fatal("nil digest must not match")
+	}
+	if tokensEqual([]byte{1, 2}, nil) {
+		t.Fatal("nil digest must not match")
+	}
+	if tokensEqual(nil, nil) {
+		t.Fatal("two nil digests must not match")
+	}
+	if !tokensEqual(hashToken("x"), hashToken("x")) {
+		t.Fatal("equal hashes must validate")
+	}
+	if tokensEqual(hashToken("x"), hashToken("y")) {
+		t.Fatal("different hashes must not validate")
+	}
+}
+
+// TestPublishPersistenceError covers the error path where persisting the
+// message fails: the caller must receive the error and nothing may be
+// published downstream (no partial fan-out).
+func TestPublishPersistenceError(t *testing.T) {
+	svc := buildTestService(t, "")
+	if err := svc.store.(*bboltStore).Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	ch, unsubscribe := svc.Subscribe()
+	defer unsubscribe()
+	if err := svc.Publish("t", "b", 0, nil); err == nil {
+		t.Fatal("Publish on a closed store must return an error")
+	}
+	select {
+	case m := <-ch:
+		t.Fatalf("no message should reach subscribers on persist error, got %+v", m)
+	default:
+	}
+}
+
+// TestMessagesNegativeLimit and friends cover the boundary that a non-positive
+// limit short-circuits to an empty result on both stores.
+func TestMessagesNegativeLimit(t *testing.T) {
+	for _, svc := range []*Service{
+		buildTestService(t, ""),
+		buildMemoryFallbackService(t),
+	} {
+		publishN(t, svc, 3)
+		msgs, err := svc.Messages(-1, 0)
+		if err != nil {
+			t.Fatalf("Messages(-1): %v", err)
+		}
+		if len(msgs) != 0 {
+			t.Fatalf("want 0 messages for negative limit, got %d", len(msgs))
+		}
+	}
+}
+
+// TestDeleteAllWhenEmpty verifies the bulk delete is idempotent and the ID
+// sequence is untouched by wiping an already-empty history.
+func TestDeleteAllWhenEmpty(t *testing.T) {
+	svc := buildTestService(t, "")
+	if err := svc.DeleteAllMessages(); err != nil {
+		t.Fatalf("DeleteAllMessages on empty store: %v", err)
+	}
+	if err := svc.Publish("t", "b", 0, nil); err != nil {
+		t.Fatalf("Publish after empty DeleteAll: %v", err)
+	}
+	msgs, _ := svc.Messages(1, 0)
+	if len(msgs) != 1 || msgs[0].ID != 1 {
+		t.Fatalf("first id after empty DeleteAll should be 1, got %+v", msgs)
 	}
 }
